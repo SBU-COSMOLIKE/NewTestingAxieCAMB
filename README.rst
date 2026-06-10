@@ -1,83 +1,171 @@
-===================
-CAMB
-===================
-:CAMB: Code for Anisotropies in the Microwave Background
-:Author: Antony Lewis and Anthony Challinor
-:Homepage: https://camb.info/
+===========================
+AxiECAMB (modern-CAMB port)
+===========================
 
-.. image:: https://img.shields.io/pypi/v/camb.svg?style=flat
-   :target: https://pypi.python.org/pypi/camb/
-.. image:: https://img.shields.io/conda/vn/conda-forge/camb.svg
-   :target: https://anaconda.org/conda-forge/camb
-.. image:: https://readthedocs.org/projects/camb/badge/?version=latest
-   :target: https://camb.readthedocs.io/en/latest
-.. image:: https://github.com/cmbant/camb/actions/workflows/tests.yml/badge.svg?branch=master
-  :target: https://github.com/cmbant/CAMB/actions
-.. image:: https://mybinder.org/badge_logo.svg
-  :target: https://mybinder.org/v2/gh/cmbant/CAMB/HEAD?filepath=docs%2FCAMBdemo.ipynb
+This is **AxiECAMB** — the ultralight-axion (ULA) effective method of
+`arXiv:2412.15192 <https://arxiv.org/abs/2412.15192>`_ (Liu, Hu et al.) — ported from its
+original CAMB-Nov13 base onto **modern CAMB 1.6.7**, including the Python wrapper.
 
-Description and installation
-=============================
+When using the axion module, please cite `arXiv:2412.15192 <https://arxiv.org/abs/2412.15192>`_
+(and Passaglia & Hu 2022, `arXiv:2201.10238 <https://arxiv.org/abs/2201.10238>`_, on which the
+method builds). The original AxiECAMB heavily modified
+`axionCAMB <https://github.com/dgrin1/axionCAMB>`_ (Hlozek et al., arXiv:1410.2896).
 
-CAMB is a cosmology code for calculating cosmological observables, including
-CMB, lensing, source count and 21cm angular power spectra, matter power spectra, transfer functions
-and background evolution. The code is in Python, with numerical code implemented in fast modern Fortran.
+Method
+======
 
-See the `CAMB python example notebook <https://camb.readthedocs.io/en/latest/CAMBdemo.html>`_ for a
-quick introduction to how to use the CAMB Python package.
+The axion has a quadratic potential and is evolved in synchronous gauge:
 
-For a standard non-editable installation use::
+- **Background**: the exact Klein-Gordon (KG) equation is solved (16-stage 8th-order
+  fixed-step Runge-Kutta in ln a) from deep radiation domination until m = dfac*H, with
+  the initial field value found by shooting to match the requested relic abundance.
+  At the switch the field is projected onto WKB cos/sin amplitudes and matched onto an
+  **effective fluid** (EFA) whose density follows a^-3 with an exp[3 int w dln a]
+  residual, w(a) = wEFA_c (H/m)^2; the matching coefficients (<H>, wEFA_c) are iterated
+  to self-consistency. dfac (default 10) is retuned internally: the oscillation phase
+  at the switch is targeted to 2 beta = 7.08 pi for light DM-like axions, and the
+  switch is pushed out of the recombination window z in (800, 1300).
+- **Perturbations**: exact KG before the switch (with a per-k conditioning rescale of
+  delta-phi), the (1+w)-weighted GDM effective fluid after, with sound speed
+  cs^2 = (sqrt(1+kappa)-1)^2/kappa + (5/4)(H/am)^2, kappa = k^2/(a^2 m^2). At the
+  switch the KG variables are projected onto (delta_ax, u_ax) preserving velocity and
+  shear continuity; the residual metric jump is absorbed into eta (sub-horizon) or
+  carried as a delta-function boundary term in the temperature line-of-sight integral
+  (super-horizon).
+- **DM vs DE**: for m/H0 >= 10 the axion is dark-matter-like — it counts in the matter
+  transfer functions, sigma_8, the equality redshift, CosmoMC theta, and halofit
+  Omega_m. For m/H0 < 10 (m <~ 1.4e-32 eV) it is dark-energy-like: KG is solved to
+  a = 1, there is no fluid switch, and the matter transfer excludes the axion.
 
-    pip install camb [--user]
+Usage (Fortran / .ini)
+======================
 
-The --user is optional and only required if you don't have write permission to your main python installation.
-To install from source, clone from github using::
+Build and run (in ``fortran/``; build forutils first if needed)::
 
-    git clone --recursive https://github.com/cmbant/CAMB
+    make camb
+    ./camb ../inifiles/params_axion.ini
 
-Then install using::
+New ini keys (see ``inifiles/params_axion.ini``):
 
-    pip install -e ./CAMB [--user]
+==============================  ==================================================================
+key                             meaning
+==============================  ==================================================================
+``m_ax``                        ULA mass in eV (negative input = log10(m_ax/eV))
+``use_axfrac``                  T: use (``omdah2``, ``axfrac``); F: use ``omaxh2`` (+ usual ``omch2``)
+``omaxh2``                      Omega_ax h^2 (when ``use_axfrac = F``)
+``omdah2``                      total dark-matter Omega h^2 (when ``use_axfrac = T``)
+``axfrac``                      axion fraction of DM (m/H0 >= 10) or of DE (m/H0 < 10)
+``axion_dfac``                  switch threshold m = dfac*H (default 10; retuned internally)
+``axion_isocurvature``, Hinf    accepted but isocurvature is force-disabled (v1.0 parity)
+==============================  ==================================================================
 
-For development, install with dev dependencies and setup pre-commit hooks::
+With ``use_axfrac = T``, ``omch2`` may be omitted (it is derived). Constant-w dark
+energy (fluid or PPF) can be combined with the axion; quintessence dark-energy models
+cannot (the axion background solver treats DE as Lambda, as in the original).
 
-    pip install -e ./CAMB[dev] [--user]
-    pre-commit install
+Usage (Python)
+==============
 
-See `CONTRIBUTING.md <CONTRIBUTING.md>`_ for full development setup instructions.
+.. code-block:: python
 
-You will need gfortran installed to compile (usually included with gcc by default).
-If you have gfortran installed, "python setup.py make" (and other standard setup commands) will build the Fortran
-library on all systems (including Windows without directly using a Makefile).
+    import camb
+    pars = camb.CAMBparams()
+    pars.set_cosmology(H0=67.32, ombh2=0.02238, omch2=0.108, mnu=0.06, tau=0.054)
+    pars.InitPower.set_params(As=2.1e-9, ns=0.966)
+    pars.set_axion(m_ax=1e-27, omaxh2=0.012)                  # or omdah2=..., axfrac=...
+    results = camb.get_results(pars)
+    Ax = results.Params.Axion        # derived quantities live on the *result* state copy
+    print(Ax.a_osc, Ax.dfac_used, Ax.tau_osc, Ax.m_ovH0)
 
-The python wrapper provides a module called "camb" documented in the Python `CAMB documentation <https://camb.readthedocs.io/en/latest/>`_.
+The axion density perturbation is available as the ``delta_axion`` matter transfer
+column (``camb.model.Transfer_axion``). ``delta_tot`` (and hence sigma_8 and the
+default matter power) includes the axion when it is DM-like, excludes it when DE-like.
 
-After installation you can also run CAMB from the command line reading parameters from a .ini file, e.g.::
+To build the Python library run ``make python`` in ``fortran/`` (or use
+``python setup.py make``), which places ``camblib.so`` in ``camb/``.
 
-  camb inifiles/planck_2018.ini
+What was ported and where
+=========================
 
-To compile the Fortran command-line code run "make camb" in the fortran directory. For full details
-see the  `ReadMe <https://camb.info/readme.html>`_.
+All modifications in the Fortran sources are marked with inline ``!AxiECAMB`` comments
+(``grep -n AxiECAMB fortran/*.f90`` lists every change site).
 
-Branches
-=============================
+- ``fortran/AxionBackground.f90`` (new): the KG background solver ``w_evolve``, EFA
+  matching ``auxiIC``, phase targeting and recombination-skip dfac retuning (moved here
+  from the old ``inidriver_axion.F90`` so the Python interface gets them too), as the
+  component class ``TAxionModel`` stored in ``CAMBparams%Axion``.
+- ``results.f90``: density budget/closure with the axion, the solver invocation,
+  tau_osc, background integrals split at the dtauda kink at a_osc (applied uniformly:
+  times, distances, sound horizons, optical depths — the original only split some),
+  fine time-step window around tau_osc, thermo values cached at tau_osc,
+  ``Transfer_axion`` column, z_eq and CosmoMC theta definitions.
+- ``equations.f90``: the two axion perturbation equations (KG <-> EFA), the
+  mid-evolution switch in the ``next_switch`` chain with the WKB projection
+  (``AxionSwitchKGtoEFA``), adiabatic delta-phi initial conditions, axion terms in
+  dgrho/dgq/grho/gpres, low-k lmaxnr boost ("WH smoother"). Tensors need no axion
+  terms: the modern tensor background comes from the dtauda-based thermo table (this
+  also fixes an original-code issue where tensors extrapolated the field table past
+  a_osc).
+- ``cmbmain.f90``: the switch boundary term in the temperature LOS integral
+  (``deltaBCSrc`` machinery, flat and curved cases), axion-aware integration start
+  time.
+- ``recfast.f90``: dHdz in the tightly-coupled T_mat term includes the axion
+  (numerical derivative of the exact H(z), stepped away from the a_osc kink).
+- ``halofit.f90``: axion counted in Omega_m (DM-like) or in the smooth DE (DE-like),
+  with a warning that the non-linear mode is inherited from axionCAMB and not well
+  tested.
+- Python: ``camb/axion.py`` (``AxionModel``), ``CAMBparams.set_axion``, transfer-name
+  lists.
 
-The master branch contains latest changes to the main release version.
+Validation against the original AxiECAMB
+========================================
 
-There is a test suite, which runs automatically on GitHub actions for new commits and pull requests.
-Reference results and test outputs are stored in the `test outputs repository <https://github.com/cmbant/CAMB_test_outputs/>`_. Tests can also be run locally.
+With matched cosmologies, the axion/LCDM suppression ratios agree between the original
+AxiECAMB (Nov13 base) and this port to:
 
-To reproduce legacy results, see these branches:
+==========================================================  =========================  ====================================
+case                                                        TT C_l ratio (l=2-2600)    P(k) ratio
+==========================================================  =========================  ====================================
+m=1e-27 eV, 10% of DM (switch z~1341)                       <= 0.01%                   <= 0.005%
+m=1e-27 eV, 100% of DM (``use_axfrac``)                     <= 0.10%                   <= 0.005% (where suppression < 10^3)
+m=1e-30 eV, 10% of DM (switch z~24, boundary term active)   <= 0.08%                   <= 0.01%
+m=1.4e-33 eV (DE-like, no switch)                           <= 0.09%                   <= 0.01%
+==========================================================  =========================  ====================================
 
- - *CAMB_sources* is the old public `CAMB Sources <https://camb.info/sources/>`_ code.
- - *CAMB_v0* is the old Fortran-oriented (gfortran 4.8-compatible) version as used by the Planck 2018 analysis.
- - *rayleigh* includes frequency-dependent Rayleigh scattering
- - *python2* is the last Python 2 compatible version
+Residuals at the 0.03-0.1% level are dominated by Nov13 <-> CAMB-1.6.7 baseline physics
+differences that do not perfectly cancel in the ratios (the absolute LCDM baselines
+differ by ~0.2%). The pure-LCDM limit of this code is bit-identical to unmodified
+CAMB 1.6.7. The standard CAMB Python test suite passes.
 
-===================
+Warnings / known differences (carried over or documented)
+==========================================================
 
-.. raw:: html
+- **Isocurvature is disabled** (as in AxiECAMB v1.0; the original mode-6 vector
+  targets variables that are not evolved). Inputs are accepted and ignored with a
+  warning.
+- The **growth-rate (Transfer_f) column** of the original is disabled there and was
+  not ported; modern CAMB's own growth outputs are available.
+- The **non-linear mode** is inherited from axionCAMB and not extensively tested;
+  ``halofit_version = 1`` (original) is suggested — Takahashi was found unstable for
+  axion models.
+- For z > 0 transfer outputs, mind whether the requested z is before or after the
+  switch: the axion density contrast is defined differently in the two regimes.
+- P(k) at wavenumbers where the spectrum is suppressed by >~ 6 orders of magnitude
+  differs from the original (which zeroed rather than extrapolated the dead tail);
+  set ``transfer_kmax`` high enough for any application sensitive to that region.
+- Default accuracy (``accuracy_boost = 1``) is what was validated in arXiv:2412.15192;
+  higher boosts apply to the non-ULA accuracy settings only.
+- CosmoMC theta counts the axion in omega_dm unconditionally (original behaviour),
+  which is only meaningful for DM-like axions.
 
-    <a href="https://www.sussex.ac.uk/astronomy/"><img src="https://cdn.cosmologist.info/antony/Sussex_white.svg" style="height:200px" height="200px"></a>
-    <a href="https://erc.europa.eu/"><img src="https://cdn.cosmologist.info/antony/ERC_white.svg" style="height:200px" height="200px"></a>
-    <a href="https://stfc.ukri.org/"><img src="https://cdn.cosmologist.info/antony/STFC_white.svg" style="height:200px" height="200px"></a>
+About the underlying CAMB
+=========================
+
+This code is built on CAMB 1.6.7 (Antony Lewis and Anthony Challinor,
+https://camb.info/): a cosmology code for calculating cosmological observables,
+including CMB, lensing, source count and 21cm angular power spectra, matter power
+spectra, transfer functions and background evolution; Python package with numerical
+code in modern Fortran. See the
+`CAMB documentation <https://camb.readthedocs.io/en/latest/>`_ and the upstream
+repository at https://github.com/cmbant/CAMB. You will need gfortran installed to
+compile.
