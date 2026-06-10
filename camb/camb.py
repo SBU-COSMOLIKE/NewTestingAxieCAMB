@@ -147,6 +147,7 @@ def set_params(cp=None, verbose=False, **params):
     * :meth:`.model.CAMBparams.set_classes`
     * :meth:`.dark_energy.DarkEnergyEqnOfState.set_params` (or equivalent if a different dark energy model class used)
     * :meth:`.reionization.TanhReionization.set_extra_params` (or equivalent if a different reionization class used)
+    * :meth:`.axion.AxionModel.set_params` (AxiECAMB ultralight-axion parameters)
     * :meth:`.model.CAMBparams.set_cosmology`
     * :meth:`.model.CAMBparams.set_matter_power`
     * :meth:`.model.CAMBparams.set_for_lmax`
@@ -184,6 +185,9 @@ def set_params(cp=None, verbose=False, **params):
     do_set(cp.set_classes)
     do_set(cp.DarkEnergy.set_params)
     do_set(cp.Reion.set_extra_params)
+    # AxiECAMB: axion abundance must be set before set_cosmology so that theta-based
+    # H0 shooting includes the axion background
+    do_set(cp.Axion.set_params)
     do_set(cp.set_cosmology)
     do_set(cp.set_matter_power)
     do_set(cp.set_for_lmax)
@@ -239,6 +243,7 @@ def get_valid_numerical_params(transfer_only=False, **class_names):
 
     extract_params(cp.DarkEnergy.set_params)
     extract_params(cp.Reion.set_extra_params)
+    extract_params(cp.Axion.set_params)  # AxiECAMB: m_ax, omaxh2, omdah2, axfrac, dfac
     extract_params(cp.set_cosmology)
     if not transfer_only:
         extract_params(cp.InitPower.set_params)

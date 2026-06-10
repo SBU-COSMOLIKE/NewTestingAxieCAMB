@@ -296,8 +296,15 @@
                     !AxiECAMB (halofit_ppf.f90): DM-like axions count as matter;
                     !DE-like axions are part of the smooth dark energy instead.
                     !Inherited from axionCAMB and not extensively tested.
-                    write(*,*) 'WARNING: nonlinear corrections with axions are inherited ', &
-                        'from axionCAMB and not extensively tested (halofit_original suggested)'
+                    !(warning printed once per process to avoid flooding MCMC logs)
+                    block
+                        logical, save :: axion_nl_warned = .false.
+                        if (.not. axion_nl_warned) then
+                            write(*,*) 'WARNING: nonlinear corrections with axions are inherited ', &
+                                'from axionCAMB and not extensively tested (halofit_original suggested)'
+                            axion_nl_warned = .true.
+                        end if
+                    end block
                     if (.not. Params%Axion%is_de_like) &
                         this%omm0 = this%omm0 + Params%Axion%omaxh2_eff/h2
                 end if

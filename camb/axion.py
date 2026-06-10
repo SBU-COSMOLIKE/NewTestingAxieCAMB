@@ -75,9 +75,11 @@ class AxionModel(F2003Class):
     _fortran_class_module_ = "AxionBackground"
     _fortran_class_name_ = "TAxionModel"
 
-    def set_params(self, m_ax, omaxh2=None, omdah2=None, axfrac=None, dfac=10.0):
+    def set_params(self, m_ax=None, omaxh2=None, omdah2=None, axfrac=None, dfac=None):
         """
-        Configure the ultralight-axion component.
+        Configure the ultralight-axion component. Update-style: only the arguments
+        given are changed, so it can be called repeatedly (e.g. once per MCMC point
+        by the Cobaya interface) on a params object that already carries settings.
 
         :param m_ax: axion mass in eV (if negative, interpreted as log10(m_ax/eV))
         :param omaxh2: Omega_ax h^2 (mutually exclusive with omdah2/axfrac)
@@ -86,21 +88,24 @@ class AxionModel(F2003Class):
             dark energy (m/H0<10)
         :param dfac: KG->EFA switch threshold m = dfac*H (default 10; retuned internally)
         """
-        if m_ax < 0:
-            m_ax = 10**m_ax
-        self.m_ax = m_ax
-        self.dfac = dfac
+        if omaxh2 is not None and (omdah2 is not None or axfrac is not None):
+            raise ValueError("set either omaxh2 or (omdah2, axfrac), not both")
+        if m_ax is not None:
+            self.m_ax = 10**m_ax if m_ax < 0 else m_ax
+        if dfac is not None:
+            self.dfac = dfac
         if omaxh2 is not None:
-            if omdah2 is not None or axfrac is not None:
-                raise ValueError("set either omaxh2 or (omdah2, axfrac), not both")
             self.use_axfrac = False
             self.omaxh2 = omaxh2
-            self.active = m_ax > 0 and omaxh2 > 0
-        elif omdah2 is not None and axfrac is not None:
+        if omdah2 is not None:
             self.use_axfrac = True
             self.omdah2 = omdah2
+        if axfrac is not None:
+            self.use_axfrac = True
             self.axfrac = axfrac
-            self.active = m_ax > 0 and axfrac > 0
-        else:
-            raise ValueError("give either omaxh2 or both omdah2 and axfrac")
+        self.active = self.m_ax > 0 and (
+            self.axfrac > 0 if self.use_axfrac else self.omaxh2 > 0
+        )
+        if self.active and self.use_axfrac and self.omdah2 <= 0:
+            raise ValueError("use_axfrac requires a positive omdah2")
         return self

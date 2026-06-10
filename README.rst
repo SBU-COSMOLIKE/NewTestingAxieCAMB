@@ -84,6 +84,35 @@ default matter power) includes the axion when it is DM-like, excludes it when DE
 To build the Python library run ``make python`` in ``fortran/`` (or use
 ``python setup.py make``), which places ``camblib.so`` in ``camb/``.
 
+Usage (Cobaya)
+==============
+
+This code works with **unmodified (pristine) Cobaya** — no patching of Cobaya's CAMB
+theory wrapper is needed. The axion parameters (``m_ax``, ``omaxh2``, ``omdah2``,
+``axfrac``, ``dfac``) are discovered and set through this package's own
+``camb.get_valid_numerical_params`` and ``camb.set_params`` hooks, which the stock
+wrapper already uses. Two ready-to-run examples ship in the repository root:
+
+- ``EXAMPLE_EVALUATE1.yaml`` — single-point posterior evaluation;
+- ``EXAMPLE_MCMC1.yaml`` — the corresponding MCMC (Planck lite + lowl TT/EE + DESI
+  DR2 BAO + DES-Y5 SN + ACT DR6 lensing), sampling
+  (logA, ns, 100theta_*, omegabh2, omegach2, tau, omegaaxh2, logmx).
+
+Setup and run (from the repository root, with ``cobaya`` installed)::
+
+    cd fortran && make camb && make python PYCAMB_OUTPUT_DIR=../camb/ && cd ..
+    pip install act_dr6_lenslike
+    cobaya-install EXAMPLE_MCMC1.yaml -p /path/to/cobaya_packages
+    cobaya-run EXAMPLE_MCMC1.yaml -p /path/to/cobaya_packages
+
+Conventions used in the examples (see comments inside the yaml files): the chain
+samples ``thetastar100`` (= 100 theta_*) and feeds ``thetastar`` to CAMB via a
+value-lambda (CAMB's input is theta_* itself); ``logA -> As``,
+``omegaaxh2 -> omaxh2`` and ``logmx -> m_ax`` are standard value-lambda mappings;
+``theta_H0_range: [40, 130]`` brackets the theta -> H0 solution over the whole prior
+box; ``halofit_version: original`` is the AxiECAMB-validated non-linear treatment;
+the ``omegam`` derived parameter excludes the axion (the DE-like convention).
+
 What was ported and where
 =========================
 

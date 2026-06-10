@@ -423,7 +423,7 @@ class CAMBparams(F2003Class):
         """
         return self.f_Validate() != 0
 
-    def set_axion(self, m_ax, omaxh2=None, omdah2=None, axfrac=None, dfac=10.0):
+    def set_axion(self, m_ax=None, omaxh2=None, omdah2=None, axfrac=None, dfac=None):
         """
         Configure the AxiECAMB ultralight-axion component (arXiv:2412.15192).
 

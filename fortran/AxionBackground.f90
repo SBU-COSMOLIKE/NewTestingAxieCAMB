@@ -680,9 +680,18 @@
                     end if
                 end do
                 if (badflag /= 0) then
-                    call GlobalError('TAxionModel: collapsing or NaN background history', &
-                        error_unsupported_params)
-                    return
+                    !A collapsing/NaN *trial* history just means this candidate initial
+                    !field value is too small for the trial cosmology (this happens
+                    !legitimately during theta->H0 shooting, where extreme trial H0
+                    !values give a strongly negative Lambda from closure and the
+                    !under-dense bisection candidates hit H^2 < 0). Treat the trial as
+                    !under-dense so the bisection pushes the field value up; a hard
+                    !error is only raised if the converged solution itself is invalid
+                    !(checked after the final EFA matching below).
+                    omaxh2_guess(j) = 0._dl
+                    aosc_guess(j) = 15.0d0
+                    badflag = 0
+                    cycle
                 end if
 
                 f_arr(1:ntable) = maxion_twiddle/(diagnostic(1:ntable))
@@ -732,6 +741,14 @@
                     omaxh2_wcorr = rhorefp*(aosc_guess(j)**3.0d0)*dexp((wcorr_coeff**2.0d0)*3.0d0* &
                         this%wEFA_c*(1.0d0 - 1.0d0/(aosc_guess(j)**4.0d0))/4.0d0)
                     omaxh2_guess(j) = omaxh2_wcorr
+                    if (badflag /= 0 .or. .not. (omaxh2_guess(j) == omaxh2_guess(j))) then
+                        !flagged/NaN trial from the EFA matching: treat as under-dense
+                        !(same per-trial recovery as after the RK integration above)
+                        omaxh2_guess(j) = 0._dl
+                        aosc_guess(j) = 15.0d0
+                        badflag = 0
+                        cycle
+                    end if
 
                     !dfac that would relocate the switch to z=800 (for the recombination skip)
                     if (aosc_guess(j) < this%a_skip .and. aosc_guess(j) >= this%a_skipst) then
@@ -858,6 +875,21 @@
         maxion_twiddle, this%a_osc, (/v1_ref, v2_ref/), badflag, lhsqcont_massless, &
         lhsqcont_massive, BG%Nu_mass_eigenstates, BG%nu_masses, littlehauxi, &
         this%ahosc_ETA, A_coeff, tvarphi_c, tvarphi_cp, tvarphi_s, tvarphi_sp, rhorefp, Prefp)
+
+    if (maxion_twiddle >= 10._dl) then
+        !hard error only if the *converged* oscillating solution is invalid
+        if (badflag /= 0 .or. .not. (rhorefp == rhorefp)) then
+            call GlobalError('TAxionModel: invalid converged background history', &
+                error_unsupported_params)
+            badflag = 1
+            return
+        end if
+    else
+        !DE-like: the final EFA matching above was evaluated at the a_osc=15 sentinel
+        !(beyond today) purely for bookkeeping; its values are never used and a
+        !negative H^2 there (recollapse after today) is not an error
+        badflag = 0
+    end if
 
     this%ah_osc = littlehauxi
     this%A_coeff = A_coeff
