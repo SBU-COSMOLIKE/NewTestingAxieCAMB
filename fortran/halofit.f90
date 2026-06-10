@@ -106,6 +106,15 @@
     TYPE HM_cosmology
         !Contains only things that do not need to be recalculated with each new z
         REAL(dl) :: om_m, om_c, om_b, om_nu, om_v, w, wa, f_nu, ns, h, Tcmb, Nnu
+        !AxiECAMB: exact ultralight-axion background, added to the internal expansion
+        !as a separate component so HMcode's closed w0-wa universe stays consistent.
+        !ax_is_matter (m/H0>=10): the axion counts as clustering cold matter in the
+        !halo-model quantities (Omega_m_hm, sigma(R)<->M mapping, EH99 cold ratio),
+        !mirroring the fully-clustering kluge of AxiECAMB's classic halofit.
+        LOGICAL :: has_ax = .FALSE., ax_is_matter = .FALSE.
+        REAL(dl) :: om_ax0 = 0._dl
+        INTEGER :: n_ax = 0
+        REAL(dl), ALLOCATABLE :: ax_lna(:), ax_lnom(:), ax_w(:)
         REAL(dl), ALLOCATABLE :: log_r_sigma(:), log_sigma(:)
         REAL(dl), ALLOCATABLE :: a_growth(:), growth(:), agrow(:)
         REAL(dl), ALLOCATABLE :: log_k_plin(:), log_plin(:), log_plinc(:)
@@ -1029,8 +1038,14 @@
         !Theta for temperature (BigT=T/2.7 K)
         BigT=cosm%Tcmb/2.7
 
-        !The matter-radiation equality redshift
-        zeq=(2.5e4)*cosm%om_m*(cosm%h**2)*(BigT**(-4.))
+        !AxiECAMB: DM-like axions are part of the EH99 total matter ("cb+nu")
+        block
+            real(dl) om_m_eh
+            om_m_eh = cosm%om_m
+            IF(cosm%has_ax .AND. cosm%ax_is_matter) om_m_eh = om_m_eh + cosm%om_ax0
+
+            !The matter-radiation equality redshift
+            zeq=(2.5e4)*om_m_eh*(cosm%h**2)*(BigT**(-4.))
 
         !The growth function normalised such that D=(1.+z_eq)/(1+z) at early times (when Omega_m \approx 1)
         IF (EdS_Tcold_growth) THEN
@@ -1041,7 +1056,8 @@
 
         !Wave number relative to the horizon scale at equality (equation 5)
         !Extra factor of h becauase all my k are in units of h/Mpc
-        q=k*cosm%h*BigT**2/(cosm%om_m*cosm%h**2)
+        q=k*cosm%h*BigT**2/(om_m_eh*cosm%h**2)
+        end block
 
         !Free streaming scale (equation 14)
         !Note that Eisenstein & Hu (1999) only consider the case of 3 neutrinos
@@ -1082,6 +1098,30 @@
         cosm%Nnu=CP%Num_Nu_massive
         cosm%ns= CP%InitPower%Effective_ns()
     end associate
+
+    !AxiECAMB: exact axion background tables for the internal expansion (Hubble2/AH
+    !and hence the growth ODE), plus the halo-model matter bookkeeping by regime.
+    !Without this, the axion's share of the budget would be misassigned a (1+z)^2
+    !curvature-like scaling by the closure remainder in Hubble2.
+    cosm%has_ax = .FALSE.
+    cosm%ax_is_matter = .FALSE.
+    cosm%om_ax0 = 0._dl
+    IF (State%HasAxion()) THEN
+        CALL fill_HM_axion(State, cosm)
+        IF (cosm%ax_is_matter) THEN
+            !DM-like: axion counts as (fully clustering) matter for f_nu, consistent
+            !with the input P(k) built from Transfer_tot which includes the axion
+            cosm%f_nu = cosm%om_nu/(cosm%om_m + cosm%om_ax0)
+        END IF
+        block
+            logical, save :: ax_hm_noted = .false.
+            if (.not. ax_hm_noted) then
+                write(*,*) 'HMcode with axions: exact axion expansion; DM-like axions ', &
+                    'treated as fully clustering cold matter (no Jeans-scale halo suppression)'
+                ax_hm_noted = .true.
+            end if
+        end block
+    END IF
 
     ! Baryon feedback parameters
     IF(this%halofit_version==halofit_mead2015 .OR. this%halofit_version==halofit_mead2016)  THEN
@@ -1369,6 +1409,15 @@
         cosm_lcdm%w=-1.
         cosm_lcdm%wa=0.
         cosm_lcdm%om_v=1.-cosm%om_m !Enforce flatness
+        !AxiECAMB: the Dolag LCDM reference replaces the axion: DM-like, its density
+        !is folded into the reference matter; DE-like, it is absorbed into Lambda by
+        !the flatness condition. Either way the reference itself has no axion term.
+        IF(cosm%has_ax) THEN
+            cosm_lcdm%has_ax=.FALSE.
+            cosm_lcdm%om_ax0=0._dl
+            IF(cosm%ax_is_matter) cosm_lcdm%om_m=cosm%om_m+cosm%om_ax0
+            cosm_lcdm%om_v=1.-cosm_lcdm%om_m
+        END IF
 
         !Needs to use grow_int explicitly here for LCDM model to avoid growth HM_tables
         ginf_lcdm=growint(zinf,cosm_lcdm)
@@ -1582,6 +1631,9 @@
 
     !In M_sun per Mpc^3 with h factors included. The constant does this.
     cosmic_density=(2.775d11)*cosm%om_m
+    !AxiECAMB: DM-like axions are part of the mean matter density used for the
+    !sigma(R) <-> halo-mass mapping (consistent with the axion-inclusive input P(k))
+    IF(cosm%has_ax .AND. cosm%ax_is_matter) cosmic_density=cosmic_density+(2.775d11)*cosm%om_ax0
 
     END FUNCTION cosmic_density
 
@@ -2462,6 +2514,91 @@
 
     END FUNCTION gst
 
+    SUBROUTINE fill_HM_axion(State, cosm)
+    !AxiECAMB: tabulate the exact axion background for HMcode's internal expansion:
+    !Omega_ax(a) = 8 pi G rho_ax(a)/(3 H0^2) from the component (KG table before the
+    !switch, EFA dilution after, kink included), and the exact w_ax(a) for AH.
+    class(CAMBdata) :: State
+    TYPE(HM_cosmology) :: cosm
+    INTEGER :: i
+    REAL(dl) :: a, v1, v2, ke, pe
+    INTEGER, PARAMETER :: n_ax_table = 2048
+    REAL(dl), PARAMETER :: lna_min = log(1e-6_dl)
+
+    associate (Ax => State%CP%Axion)
+        cosm%has_ax = .TRUE.
+        cosm%ax_is_matter = .NOT. Ax%is_de_like
+        cosm%om_ax0 = Ax%omaxh2_eff/(State%CP%H0/100._dl)**2
+        cosm%n_ax = n_ax_table
+        IF (ALLOCATED(cosm%ax_lna)) DEALLOCATE(cosm%ax_lna, cosm%ax_lnom, cosm%ax_w)
+        ALLOCATE(cosm%ax_lna(n_ax_table), cosm%ax_lnom(n_ax_table), cosm%ax_w(n_ax_table))
+        DO i = 1, n_ax_table
+            cosm%ax_lna(i) = lna_min + (0._dl - lna_min)*(i-1)/real(n_ax_table-1, dl)
+            a = exp(cosm%ax_lna(i))
+            !same density as in CAMB's grho_no_de: 8 pi G rho_ax a^4 / (a^4 grhocrit)
+            cosm%ax_lnom(i) = log(max(Ax%GrhoAx(a)/(a**4*State%grhocrit), 1e-30_dl))
+            IF (Ax%has_switch .AND. a > Ax%a_osc) THEN
+                !effective fluid: w = wEFA_c (H/m)^2 with the a^-2 radiation-era scaling
+                cosm%ax_w(i) = Ax%wEFA_c*(Ax%wcorr_coeff/a**2)**2
+            ELSE
+                !exact Klein-Gordon equation of state from the background field tables
+                CALL Ax%FieldValsAta(a, v1, v2)
+                ke = (v2/a)**2
+                pe = (Ax%m_ovH0*v1)**2
+                IF (ke + pe > 0._dl) THEN
+                    cosm%ax_w(i) = (ke - pe)/(ke + pe)
+                ELSE
+                    cosm%ax_w(i) = -1._dl
+                END IF
+            END IF
+        END DO
+    end associate
+    END SUBROUTINE fill_HM_axion
+
+    FUNCTION Omega_ax_hm(z,cosm)
+    !AxiECAMB: exact rho_ax(a)/rho_crit,0 (the H0^2-normalized axion density entering
+    !Hubble2), linearly interpolated in ln a on the dense uniform table; clamped to the
+    !endpoints (frozen field below the table, today's value above)
+    REAL(dl) :: Omega_ax_hm
+    REAL(dl), INTENT(IN) :: z
+    TYPE(HM_cosmology), INTENT(IN) :: cosm
+    REAL(dl) :: lna, f
+    INTEGER :: i
+
+    lna = -log(1._dl + z)
+    IF (lna <= cosm%ax_lna(1)) THEN
+        Omega_ax_hm = exp(cosm%ax_lnom(1))
+    ELSE IF (lna >= cosm%ax_lna(cosm%n_ax)) THEN
+        Omega_ax_hm = exp(cosm%ax_lnom(cosm%n_ax))
+    ELSE
+        f = (lna - cosm%ax_lna(1))/(cosm%ax_lna(2) - cosm%ax_lna(1))
+        i = min(cosm%n_ax - 1, 1 + int(f))
+        f = f - (i - 1)
+        Omega_ax_hm = exp(cosm%ax_lnom(i)*(1._dl - f) + cosm%ax_lnom(i+1)*f)
+    END IF
+    END FUNCTION Omega_ax_hm
+
+    FUNCTION w_ax_hm(z,cosm)
+    !AxiECAMB: exact axion equation of state (for the acceleration function AH)
+    REAL(dl) :: w_ax_hm
+    REAL(dl), INTENT(IN) :: z
+    TYPE(HM_cosmology), INTENT(IN) :: cosm
+    REAL(dl) :: lna, f
+    INTEGER :: i
+
+    lna = -log(1._dl + z)
+    IF (lna <= cosm%ax_lna(1)) THEN
+        w_ax_hm = cosm%ax_w(1)
+    ELSE IF (lna >= cosm%ax_lna(cosm%n_ax)) THEN
+        w_ax_hm = cosm%ax_w(cosm%n_ax)
+    ELSE
+        f = (lna - cosm%ax_lna(1))/(cosm%ax_lna(2) - cosm%ax_lna(1))
+        i = min(cosm%n_ax - 1, 1 + int(f))
+        f = f - (i - 1)
+        w_ax_hm = cosm%ax_w(i)*(1._dl - f) + cosm%ax_w(i+1)*f
+    END IF
+    END FUNCTION w_ax_hm
+
     FUNCTION Hubble2(z,cosm)
     !This calculates the dimensionless squared hubble parameter at redshift z (H/H_0)^2!
     !Ignores contributions from radiation (not accurate at high z, but consistent with simulations)!
@@ -2469,7 +2606,10 @@
     REAL(dl), INTENT(IN) :: z
     TYPE(HM_cosmology), INTENT(IN) :: cosm
 
-    Hubble2=cosm%om_m*(1+z)**3+cosm%om_v*X_de(z,cosm)+(1-cosm%om_m-cosm%om_v)*(1+z)**2
+    !AxiECAMB: the axion enters as its own exact component; its share is removed from
+    !the closure remainder (which upstream treats as curvature-like (1+z)^2)
+    Hubble2=cosm%om_m*(1+z)**3+cosm%om_v*X_de(z,cosm)+(1-cosm%om_m-cosm%om_v-cosm%om_ax0)*(1+z)**2
+    IF(cosm%has_ax) Hubble2=Hubble2+Omega_ax_hm(z,cosm)
 
     END FUNCTION Hubble2
 
@@ -2480,6 +2620,8 @@
     TYPE(HM_cosmology), INTENT(IN) :: cosm
 
     AH=cosm%om_m*(1+z)**3+cosm%om_v*(1.+3.*w_de_hm(z,cosm))*X_de(z,cosm)
+    !AxiECAMB: exact axion contribution with its exact equation of state
+    IF(cosm%has_ax) AH=AH+Omega_ax_hm(z,cosm)*(1.+3.*w_ax_hm(z,cosm))
     AH=-AH/2.
 
     END FUNCTION AH
@@ -2519,6 +2661,10 @@
 
     om_m=cosm%om_m
     Omega_m_hm=(om_m*(1+z)**3)/Hubble2(z,cosm)
+    !AxiECAMB: DM-like axions count as matter (exact density, so the pre-oscillation
+    !frozen phase correctly does not source structure growth)
+    IF(cosm%has_ax .AND. cosm%ax_is_matter) &
+        Omega_m_hm=Omega_m_hm+Omega_ax_hm(z,cosm)/Hubble2(z,cosm)
 
     END FUNCTION Omega_m_hm
 
@@ -2529,6 +2675,9 @@
     TYPE(HM_cosmology), INTENT(IN) :: cosm
 
     Omega_cold_hm=((cosm%om_c+cosm%om_b)*(1+z)**3)/Hubble2(z,cosm)
+    !AxiECAMB: DM-like axions treated as cold (fully clustering kluge)
+    IF(cosm%has_ax .AND. cosm%ax_is_matter) &
+        Omega_cold_hm=Omega_cold_hm+Omega_ax_hm(z,cosm)/Hubble2(z,cosm)
 
     END FUNCTION Omega_cold_hm
 

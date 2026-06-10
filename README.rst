@@ -174,9 +174,17 @@ Warnings / known differences (carried over or documented)
   warning.
 - The **growth-rate (Transfer_f) column** of the original is disabled there and was
   not ported; modern CAMB's own growth outputs are available.
-- The **non-linear mode** is inherited from axionCAMB and not extensively tested;
-  ``halofit_version = 1`` (original) is suggested — Takahashi was found unstable for
-  axion models.
+- The **non-linear mode** is inherited from axionCAMB and not extensively tested.
+  Two supported paths: ``halofit_version = 1`` (original; the AxiECAMB-validated
+  treatment — Takahashi was found unstable for axion models), and HMcode
+  (``mead2020`` etc.), which has been made axion-consistent: the exact axion
+  background (KG/EFA density and equation of state) enters HMcode's internal
+  expansion and growth as a separate component, and DM-like axions (m/H0 >= 10)
+  count as fully clustering cold matter in the halo-model quantities (Omega_m,
+  the sigma(R)-mass mapping, the EH99 cold ratio, f_nu and the Dolag reference) —
+  i.e. no Jeans-scale halo suppression is modelled (the linear input P(k) carries
+  the scale-dependence). DE-like axions affect HMcode only through the expansion.
+  Non-axion HMcode results are bit-identical to upstream (all changes gated).
 - For z > 0 transfer outputs, mind whether the requested z is before or after the
   switch: the axion density contrast is defined differently in the two regimes.
 - P(k) at wavenumbers where the spectrum is suppressed by >~ 6 orders of magnitude
