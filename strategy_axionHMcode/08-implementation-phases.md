@@ -12,6 +12,11 @@ discipline: compile checkpoints + null tests every time).
 
 ## Phase 0 — baselines and benchmarks (no new code)
 
+- Everything in this phase runs inside the ACTIVE Cocoa environment — conda cocoapy310 +
+  the .local pip overlay, i.e. after `source start_cocoa.sh`, prompt `(cocoa)(.local)` —
+  not the bare conda env and not the system python 3.9 used during the original port.
+  Includes a numba smoke test (`import numba` + trivial @njit) against the overlaid
+  numpy 1.26.3 ([[axionhmcode-verified-facts]] "two-layered").
 - Build New_AxiECAMB main branch (serial make; miniforge gfortran 14.3; SDKROOT quirks —
   [[axiecamb-port-project]]).
 - Run the existing python test suite + EXAMPLE_EVALUATE1.yaml to confirm the starting state.

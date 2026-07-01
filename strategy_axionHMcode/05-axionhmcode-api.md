@@ -62,8 +62,11 @@ the Jeans scale (their Eq. 9; README "How Does the Code Work?").
   uses, [[axionhmcode-architecture]]). The Phase-0 single-z benchmark is informational only
   (sets MCMC wall-time expectations), not a design gate.
 - numba @njit in halo_bias.py and variance.py (Dome update) — first call pays JIT
-  compilation. RESOLVED: numba 0.60 is pinned in all Cocoa env files (cocoapy310*.yml);
-  no new dependency needed.
+  compilation. numba 0.60 comes from the conda layer of Cocoa's TWO-LAYER environment;
+  the .local pip layer overlays numpy==1.26.3 (compatible with numba 0.60 on paper) —
+  smoke-test `import numba` inside the active (cocoa)(.local) env in Phase 0. Any new
+  pip dependency goes through setup_pip_core_packages.sh, never ad-hoc pip
+  ([[axionhmcode-verified-facts]] "two-layered").
 - Gaughan et al. ran full MCMCs with this code inside AxiCAMB (accuracy=2.5, m/H*=50),
   so per-step cost is known to be tractable; ACT DR6 used an emulator instead. If cost ever
   becomes prohibitive, the PI's plan is to train ML emulators USING this pipeline as the

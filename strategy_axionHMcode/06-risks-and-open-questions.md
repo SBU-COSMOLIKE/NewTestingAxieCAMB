@@ -92,8 +92,12 @@ metadata:
   guarded, single-redshift). TT/TE/EE/phiphi and Pk_grid never call it. Document as
   "21cm outputs unsupported with the external ratio".
 - R8 — global/module state and MPI: axionHMcode is functional (dict in, array out) — no
-  module-level caches spotted so far; confirm before declaring MPI-safe. numba part
-  RESOLVED: numba 0.60 pinned in all Cocoa env files; JIT cost paid once per process.
+  module-level caches spotted so far; confirm before declaring MPI-safe. numba part:
+  available from the conda layer (0.60), but Cocoa's .local pip layer overlays
+  numpy==1.26.3 on top of it (PI correction 2026-07-01 — two-layer environment,
+  [[axionhmcode-verified-facts]]); compatible on paper, smoke-test inside the active
+  (cocoa)(.local) env in Phase 0. New pip deps, if ever needed, go into
+  setup_pip_core_packages.sh (--prefix ${ROOTDIR}/.local). JIT cost paid once per process.
 - R11 — cobaya treats EVERY `get_*` method on a Theory subclass as a providable product
   (theory.py:173 → tools.py:937-948). The boost class must expose exactly one such method
   (get_non_linear_ratio); all helpers get underscore-prefixed names, or cobaya's

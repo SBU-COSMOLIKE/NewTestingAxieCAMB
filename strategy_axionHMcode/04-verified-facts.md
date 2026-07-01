@@ -100,8 +100,19 @@ parameters alpha_1/alpha_2/gamma_1/gamma_2 via cosmo_dic keys, no packaging file
   the 21cm power path (fortran/results.f90:4153, guarded by NonLinear /= None and /= Lens
   inside the 21cm PK function, single-redshift only). TT/TE/EE/phiphi and Pk_grid never hit
   it — risk R7 downgraded to "21cm outputs unsupported".
-- numba 0.60 is pinned in ALL Cocoa env files (cocoapy310*.yml) — no new dependency needed
-  for axionHMcode's @njit paths.
+- Python environment is TWO-LAYERED (PI correction 2026-07-01; cocoa/README.md "(cocoa)(.local)
+  is a feature, not a bug"): conda env cocoapy310 (yml files; includes numba 0.60) PLUS a
+  Cocoa-private pip prefix at `${ROOTDIR}/.local` installed by
+  `installation_scripts/setup_pip_core_packages.sh` and activated by `start_cocoa.sh`.
+  The .local layer SHADOWS conda packages — notably `numpy==1.26.3` (or 1.23.5 under
+  COCOA_FORCE_NUMPY_1_23), plus mpi4py 4.0.3, setuptools, emcee, sacc, jax 0.4.18, etc.
+  numba 0.60 (conda layer) supports numpy 1.22-2.0, so the overlay is compatible on paper,
+  but the Phase-0 smoke test (`import numba` + a trivial @njit call) must run inside the
+  ACTIVE (cocoa)(.local) environment, not the bare conda env. If axionHMcode ever needs a
+  new pip package or a re-pin, the sanctioned mechanism is adding it to the arrays in
+  setup_pip_core_packages.sh (pip --prefix ${ROOTDIR}/.local + sentinel-hash caching) —
+  never an ad-hoc global pip install. Reloading (.local) requires re-sourcing
+  start_cocoa.sh after any set_installation_options.sh edit.
 - InitPower attribute names on the ctypes class (camb/initialpower.py:128-136): `ns`,
   `pivot_scalar` (Mpc^-1), `As` — read off results.Params.InitPower after the cobaya
   wrapper sets them (camb.py:714, before the ratio callback at :717).
