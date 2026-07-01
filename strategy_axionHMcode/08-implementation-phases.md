@@ -32,7 +32,11 @@ discipline: compile checkpoints + null tests every time).
   This is the prompt's "if we were calling pyCAMB directly" snippet made real (note the
   actual API is params.NonLinearModel = ExternalNonLinearRatio(); .set_ratio(...);
   there is no results.set_nonlin_ratio).
-- Establish transfer-variable semantics per regime (V1, risks R2/R3).
+- Establish transfer-variable semantics per regime (V1, risks R2/R3), including what
+  Transfer_axion returns for z > z_osc (KG phase) — R10 lead in
+  [[axionhmcode-collaborator-guidance]].
+- Check how the public AxiCAMB (github.com/adammoss/AxiCAMB) handles redshifts near/above
+  the EFA switch in its axionHMcode interface (R10 lead).
 - Reproduce Gaughan figures (V3) from this script.
 - Checkpoint: V1 + V3 pass; conventions frozen and written into
   [[axionhmcode-architecture]].

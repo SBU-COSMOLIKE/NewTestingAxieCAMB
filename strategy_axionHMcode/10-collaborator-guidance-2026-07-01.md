@@ -1,66 +1,64 @@
 ---
 name: axionhmcode-collaborator-guidance
-description: Wayne Hu's 2026-07-01 email comments on the open questions — verbatim record plus resulting decisions; further specifics expected from Dan
+description: Collaborator design guidance (2026-07-01) on the open questions — version default, validity-domain physics, switch-redshift risk, ratio convention, compatibility constraint — with epistemic status and follow-up leads
 metadata:
   type: project
 ---
 
-# Collaborator guidance (Wayne Hu, email relayed by PI 2026-07-01)
+# Collaborator design guidance (2026-07-01)
 
-Verbatim record of Wayne's comments on the open questions in file 06 (email of
-2026-07-01; further specifics expected from Dan). Interleaved formatting from the email
-is flattened here; each block is Wayne replying to the numbered question.
+Design guidance gathered from group physics discussion on 2026-07-01, addressing the open
+questions in file 06. Recorded here in summary form; further, more specific input from
+the collaboration is expected and is tracked under "Pending".
 
-## On question 1 (basic vs dome, nuisance parameters)
+## Epistemic status
 
-> Dome I think is the most recent recalibration. Exposing params is useful.
+This guidance reflects physics judgment, not hands-on experience with the axionHMcode
+implementation, and the collaboration flagged exactly that limitation when giving it.
+Consequence: every decision sourced from this file (dome default, exposed nuisance
+parameters, the smooth-component reasoning, risk R10) is working guidance, not
+code-verified fact. It must be re-verified against the actual code and papers during
+Phases 0-1, and any disagreement between this guidance and the code/papers is itself a
+finding to surface to the group — not a conflict to resolve silently in either direction.
 
-DECISION: `version: dome` is the default; the Dentler nuisance parameters
-(alpha_1, alpha_2, gamma_1, gamma_2) are exposed as parameters of the Theory block so
-they CAN be sampled (defaults = the calibration values; the example MCMC shows the
-Gaughan-et-al prior blocks, commented or active per run).
+## Version default and nuisance parameters (question 1)
 
-## On question 2 (out-of-validity policy)
+dome is the most recent recalibration and is adopted as the default `version`. Exposing
+the calibration parameters is considered useful: the Dentler nuisance parameters
+(alpha_1, alpha_2, gamma_1, gamma_2) become Theory-block parameters that can be sampled
+(defaults = the calibration values; the example MCMC shows the Gaughan-et-al prior
+blocks, commented or active per run).
 
-> in principle there doesn't need to be restrictions for (a), (b) if the axions can be
-> treated as a smooth vs clustered component though warnings may still be good. For (a)
-> the axion has a horizon scale smoothness so in principle could be treated in the same
-> way as w0wa but could also be a smooth component of mixed dark matter so long as we
-> know what the conventions for "matter" are and how they are related to the Weyl
-> potential for lensing. (c),(d) warn but there may be a problem with redshifts above
-> the switch.
+## Validity-domain physics (question 2)
 
-Interpretation and consequences:
-
-- (a) DE-like and (b) large fax are not fundamentally out of domain — a proper
-  smooth-vs-clustered decomposition would cover them. For (a) two routes exist in
-  principle: treat the DE-like axion like w0wa smooth dark energy, or as a smooth
-  component of mixed dark matter. Either requires pinning down what "matter" means in
-  every convention layer (CAMB Transfer_tot, axionHMcode Eq. 9 weights, the boost
-  denominator) and how that maps to the Weyl potential sourcing the lensing. That is a
-  physics extension, not plumbing — DEFERRED until Dan's specifics; the current build
-  keeps the hard error for (a) as a pragmatic guard, explicitly documented as
-  not-fundamental (see [[axionhmcode-architecture]] "Regime gating").
-- (b) stays warn-under-`strict: False` (unchanged, now with Wayne's blessing).
-- (c),(d): warn — BUT Wayne flags a real breakdown: redshifts above the KG→EFA switch
-  (z > z_osc, i.e. a < a_osc, before the axion oscillates and becomes DM-like). There the
-  axion transfer function is not a DM density contrast in the halo-model sense at all.
-  Logged as new risk R10 in [[axionhmcode-open-questions]]: the Theory class must check
-  the top of its z grid against z_osc = 1/a_osc - 1 (available as
+- Conditions (a) DE-like axion and (b) large fax are not fundamentally out of domain:
+  a proper smooth-vs-clustered decomposition of the axion would cover them, though
+  warnings remain appropriate. For (a), the axion has horizon-scale smoothness, so two
+  routes exist in principle: treat the DE-like axion analogously to w0wa smooth dark
+  energy, or as a smooth component of mixed dark matter. Either route requires pinning
+  down what "matter" means in every convention layer (CAMB Transfer_tot, axionHMcode
+  Eq. 9 weights, the boost denominator) and how that maps to the Weyl potential sourcing
+  the lensing. That is a physics extension, not plumbing — DEFERRED pending further
+  collaborator input; the current build keeps the hard error for (a) as a pragmatic
+  guard, explicitly documented as not-fundamental (see [[axionhmcode-architecture]]
+  "Regime gating").
+- (b) stays warn-under-`strict: False`, consistent with this guidance.
+- (c),(d) warn — but with one real breakdown identified: redshifts above the KG→EFA
+  switch (z > z_osc, i.e. a < a_osc, before the axion oscillates and becomes DM-like).
+  There the axion transfer function is not a DM density contrast in the halo-model sense
+  at all. Logged as risk R10 in [[axionhmcode-open-questions]]: the Theory class must
+  check the top of its z grid against z_osc = 1/a_osc - 1 (available as
   `results.Params.Axion.a_osc`, camb/axion.py:36). For the target window
-  (m ~ 1e-25..1e-23 eV) oscillation begins deep in the radiation era (z_osc >> 1e4),
-  far above any lensing-source redshift, so this is an assertion that should never fire
-  in production — but it must exist, because a light-mass misconfiguration would
-  silently feed garbage otherwise.
+  (m ~ 1e-25..1e-23 eV) oscillation begins deep in the radiation era (z_osc >> 1e4), far
+  above any lensing-source redshift, so this assertion should never fire in production —
+  but it must exist, because a light-mass misconfiguration would silently feed garbage
+  otherwise.
 
-## On question 6 (Eq.9-consistent ratio) and question 4 (staging)
+## Ratio convention (question 6) and compatibility constraint (question 4)
 
-> plausible, possibly the only way to fix that if we want a drag and drop compatibility
-> for axionHMCode updates in 4.
-
-- Question 6: the Eq.9-consistent ratio proposal (numerator AND denominator in
-  axionHMcode's own decomposition) is deemed plausible — adopted as the working
-  convention, pending Dan's specifics.
+- The Eq.9-consistent ratio proposal (numerator AND denominator in axionHMcode's own
+  decomposition) is assessed as plausible — adopted as the working convention, pending
+  further collaborator input.
 - Question 4 gains a design constraint: DRAG-AND-DROP COMPATIBILITY with future
   axionHMcode updates. The Theory class must call axionHMcode only through its public
   entry points (func_power_spec_dic-equivalent construction, HMCode_param_dic,
@@ -68,8 +66,30 @@ Interpretation and consequences:
   if a group fork is created it is pin-only (no code changes). The Eq.9-internal ratio
   definition supports this: all conventions live on our side of the interface.
 
+## Follow-up leads on the switch problem (R10 area)
+
+Directions raised in the same discussion, recorded as investigation leads (not decisions):
+
+- Phase-1 check: how the public AxiCAMB (github.com/adammoss/AxiCAMB, the code base of
+  arXiv:2605.12054) handles redshifts near/above the EFA switch in its axionHMcode
+  nonlinear interface — MCMCs were shipped with it, so either the problem was hit and
+  solved there, or its z range never reaches the switch.
+- Possible resolution: output instantaneous density transfer functions in the KG phase,
+  accepting a definitional discontinuity at the switch. Phase-1 sub-task: establish what
+  New_AxiECAMB's Transfer_axion actually returns for z > z_osc (field phase) — the port
+  docs document careful source-discontinuity handling at the switch (README.rst:2843
+  ultra-fine time window; :4114/:4259 metric-delta source pieces; :4890 dtauda kink
+  split), but the transfer-output definition in the KG phase is unverified.
+- A "blend" across the switch (an idea from the original port-era discussions; not found
+  in the committed port docs — no written spec exists) could make weak-lensing observables
+  behave continuously across it. Would need a written definition before implementation.
+
+None of this blocks the target window (z_osc >> any lensing redshift for
+m ~ 1e-25..1e-23 eV); it matters if the pipeline is ever pushed to lighter masses.
+
 ## Pending
 
-- Dan to provide more specifics (expected: the smooth-component conventions for
+- Further collaborator input (expected: the smooth-component conventions for
   DE-like/large-fax axions and their Weyl-potential mapping; possibly ratio-convention
   details for question 6).
+- The switch-problem leads above (Phase 1).

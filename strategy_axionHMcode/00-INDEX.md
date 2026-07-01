@@ -12,7 +12,7 @@ All file:line references verified against the working tree on 2026-07-01.
 - [07-validation-plan.md](07-validation-plan.md) — regime-complete validation matrix
 - [08-implementation-phases.md](08-implementation-phases.md) — phased plan with checkpoints (no code written yet)
 - [09-mass-prior-yaml-recipes.md](09-mass-prior-yaml-recipes.md) — PI-decided mass window (1e-25..1e-23 eV) and README-ready yaml recipes: fixed mass vs sampled log-mass
-- [10-collaborator-guidance-2026-07-01.md](10-collaborator-guidance-2026-07-01.md) — Wayne Hu's comments verbatim: dome default + exposed nuisance params, smooth-component physics for DE-like/large-fax, z above the KG→EFA switch (R10), drag-and-drop axionHMcode constraint
+- [10-collaborator-guidance-2026-07-01.md](10-collaborator-guidance-2026-07-01.md) — collaborator design guidance: dome default + exposed nuisance params, smooth-component physics for DE-like/large-fax, z above the KG→EFA switch (R10), drag-and-drop axionHMcode constraint
 
 Related prior work: the AxiECAMB port to CAMB 1.6.7 (see auto-memory `axiecamb-port-project`,
 this repo's `README.rst`, and the `hmcode` branch with the halofit-level axion-aware HMcode).

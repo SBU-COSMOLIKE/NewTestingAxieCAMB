@@ -90,7 +90,8 @@ params:
   1e-23 eV, 1.5 decades up) dome results are extrapolations — governed by the theory-block
   `strict` flag (False = warn + extrapolate, True = hard error). basic version covers the
   full window.
-- dome is the default version (Wayne, 2026-07-01 — most recent recalibration). Sampled
+- dome is the default version (collaborator guidance 2026-07-01 — most recent
+  recalibration). Sampled
   log-mass runs cross the dome calibration boundary continuously: under `strict: False`
   they warn + extrapolate (treat such chains as sensitivity tests, Gaughan et al.
   Sec. IV B); basic remains available for wide-mass scans via `version: basic`.

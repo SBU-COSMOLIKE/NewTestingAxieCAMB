@@ -98,13 +98,13 @@ snippet above). Semantics over the out-of-validity conditions
   Gaughan et al. deliberately ran extrapolations; the warning states the condition,
   the sampled value, and the calibration bound.
 - Condition (a) (`results.Params.Axion.is_de_like == True`, m/H0 < 10) is a hard error
-  REGARDLESS of the flag in the current build. Per Wayne (2026-07-01,
+  REGARDLESS of the flag in the current build. Per collaborator guidance (2026-07-01,
   [[axionhmcode-collaborator-guidance]]) this is pragmatic, not fundamental: a
   smooth-vs-clustered decomposition (DE-like axion as w0wa-like smooth DE, or as a smooth
   mixed-DM component) could lift (a) and (b) once the "matter" conventions and their
-  Weyl-potential mapping are defined — deferred pending Dan's specifics. Until then, use
-  the halofit-original path (existing EXAMPLE yamls) for DE-like masses.
-- Additional unconditional check (R10, from Wayne): hard-error if the top of the z grid
+  Weyl-potential mapping are defined — deferred pending further collaborator input. Until
+  then, use the halofit-original path (existing EXAMPLE yamls) for DE-like masses.
+- Additional unconditional check (R10, from collaborator guidance): hard-error if the top of the z grid
   reaches z_osc = 1/a_osc - 1 (`results.Params.Axion.a_osc`) — above the KG→EFA switch the
   axion is not yet DM-like and its transfer function is not a halo-model density contrast.
   Never fires in the target mass window (z_osc >> 1e4); guards light-mass misconfigurations.
