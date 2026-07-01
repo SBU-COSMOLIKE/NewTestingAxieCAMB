@@ -21,8 +21,9 @@ discipline: compile checkpoints + null tests every time).
   warm), on the notebook's own example inputs. Informational only — question 5 is answered
   (accuracy first, dense z-grid; performance never drives design). The number sets MCMC
   wall-time expectations and tells us when the future emulator phase becomes attractive.
-- Log what results.Params.Transfer.PK_redshifts actually contains under NonLinear_both with
-  lensed Cls requested (risk R4).
+- Log what `results.transfer_redshifts` actually contains under NonLinear_both with lensed
+  Cls requested — confirming the GetComputedPKRedshifts analysis (R4, resolved on paper:
+  ~50*NL_Boost nodes linear in [0,10]; [[axionhmcode-verified-facts]] review pass 2).
 - Checkpoint: V0a passes; benchmark numbers recorded here.
 
 ## Phase 1 — standalone prototype (pyCAMB + axionHMcode, no Cobaya)

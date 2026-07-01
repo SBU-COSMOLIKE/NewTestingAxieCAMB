@@ -46,7 +46,8 @@ metadata:
    points, never modify its files; any group fork is pin-only.
 5. **Performance budget.** ANSWERED (PI, 2026-07-01): accuracy is the worry; performance is
    not a constraint. Consequences: (a) z-grid policy = dense — evaluate axionHMcode at every
-   redshift CAMB actually uses (the full nonlinear-lensing-augmented PK_redshifts grid);
+   redshift CAMB actually uses (the full nonlinear-lensing-augmented
+   `results.transfer_redshifts` grid — see R4);
    (b) any grid thinning or interpolation shortcut must be justified by an explicit
    convergence test (validation V6), never by cost; (c) if the pipeline later proves too
    costly for production MCMC, the PI will use THIS code as the training-data generator for
@@ -72,21 +73,31 @@ metadata:
 - R3 — which transfer variables include the axion in each regime (Transfer_tot kluge:
   axion in tot iff DM-like; Transfer_nonu semantics for the axion unverified). Must be
   established in Phase 1 with a direct dump per regime.
-- R4 — z-grid content under NonLinear_both: PK_redshifts is augmented internally by CAMB for
-  nonlinear lensing; actual node count/range must be logged at runtime (drives cost).
-  High-z clamping reuses the last z slice — pad the grid so the boundary slice is ≈ 1.
+- R4 — RESOLVED by review pass 2 (2026-07-01, [[axionhmcode-verified-facts]]): the
+  nonlinear-lensing grid is built by GetComputedPKRedshifts (fortran/results.f90:1168) —
+  nint(50*NL_Boost) redshifts linear in [0, 10] ([0, 15] if NL_Boost >= 2.5), merged with
+  the user PK_redshifts into `results.transfer_redshifts` (the ONLY Python-visible union;
+  Params.Transfer.PK_redshifts does NOT include it — the trivial-test pattern would
+  silently miss the lensing grid). Theory class reads np.array(results.transfer_redshifts),
+  sorted ascending. High-z clamping reuses the last z slice — pad so the boundary
+  slice is ≈ 1. Phase-0 runtime log remains as confirmation.
 - R5 — power-law primordial assumption: axionHMcode's primordial_PS is pure power law
   (no running). Fine for the planned chains; document as a limitation.
 - R6 — axionHMcode internal growth G_a and Omega_w_0 = 1 - Omega_m_0 assume flat LCDM
   background without the axion's early-DE phase. This is part of the calibrated model —
   keep verbatim, note in the README report (same "three Omega_m's" caveat family as the
   halofit→HMcode analysis in the prompt's Previous Attempt Notes).
-- R7 — GetNonLinRatios_All hard-stops: any requirement that requests nonlinear velocity
-  spectra (var pairs with velocities under NonLinear_pk) will kill the run. Not needed for
-  TT/TE/EE/phiphi; document.
+- R7 — DOWNGRADED by review pass 2: GetNonLinRatios_All (which ExternalNonLinearRatio
+  error-stops on) is reachable only through the 21cm power path (fortran/results.f90:4153;
+  guarded, single-redshift). TT/TE/EE/phiphi and Pk_grid never call it. Document as
+  "21cm outputs unsupported with the external ratio".
 - R8 — global/module state and MPI: axionHMcode is functional (dict in, array out) — no
-  module-level caches spotted so far; confirm before declaring MPI-safe. numba JIT cost is
-  paid once per process.
+  module-level caches spotted so far; confirm before declaring MPI-safe. numba part
+  RESOLVED: numba 0.60 pinned in all Cocoa env files; JIT cost paid once per process.
+- R11 — cobaya treats EVERY `get_*` method on a Theory subclass as a providable product
+  (theory.py:173 → tools.py:937-948). The boost class must expose exactly one such method
+  (get_non_linear_ratio); all helpers get underscore-prefixed names, or cobaya's
+  dependency resolver will see phantom products.
 - R9 — RESOLVED (was wrong; PI correction 2026-07-01): Cocoa DOES pin the cobaya commit —
   `export COBAYA_GIT_COMMIT="899f30a49f85de610dac321e91a1af50018e56aa"` at
   `cocoa/Cocoa/set_installation_options.sh:220` (consumed by setup_cobaya.sh:122-124;

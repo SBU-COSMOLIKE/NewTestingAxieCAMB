@@ -69,12 +69,49 @@ All facts below are therefore stable under Cocoa reinstalls.
 
 ## Cocoa staging status
 
-- `cocoa/Cocoa/external_modules/code/` contains CAMB, FAST-PT, emulators, etc. — but NO
-  AxiECAMB/New_AxiECAMB and NO axionHMcode yet (verified 2026-07-01). Staging is part of
-  the work.
+- UPDATE (2026-07-01, later same day): interim relative symlinks now in place —
+  `external_modules/code/AxiECAMB -> ../../../../New_AxiECAMB` and
+  `external_modules/code/axionHMcode -> ../../../../axionHMcode`
+  ([[axionhmcode-architecture]] "Staging into Cocoa"). Permanent mechanism still open.
 
 ## axionHMcode
 
 See [[axionhmcode-api]]. Cloned from SophieMLV/axionHMcode; includes the Dome et al. update
 (version 'basic' | 'dome'), numba (@njit in halo_bias.py, variance.py), Dentler nuisance
 parameters alpha_1/alpha_2/gamma_1/gamma_2 via cosmo_dic keys, no packaging files.
+
+## Review pass 2 (2026-07-01) — additional verified facts
+
+- Provider dispatch: `Theory.get_can_provide_methods` (cobaya/theory.py:173) uses
+  `get_class_methods(..., start="get_", not_base=Theory)` (tools.py:937-948): EVERY method
+  named `get_*` defined on the Theory subclass (with self as first arg) is registered as a
+  providable quantity. Implementation rule: name all internal helpers `_something`, never
+  `get_something`, or cobaya will treat them as products.
+- Nonlinear-lensing z grid: `GetComputedPKRedshifts` (fortran/results.f90:1168) — with
+  NonLinear_lens/both + DoLensing, NLL grid = nint(10*5*NL_Boost) redshifts LINEAR in
+  [0, maxRedshift], maxRedshift = 10 (15 when NL_Boost >= 2.5),
+  NL_Boost = AccuracyBoost*NonlinSourceBoost; also raises Transfer kmax to
+  max(kmax, 5*NL_Boost) (internal units — confirm in Phase 0). Master array = union with
+  PK_redshifts, exposed to Python ONLY as `results.transfer_redshifts`
+  (camb/results.py:226; order not guaranteed ascending — sort before use).
+  Params.Transfer.PK_redshifts does NOT include the NLL grid. At AccuracyBoost=1.5
+  (group default) expect ~75 z nodes.
+- `GetNonLinRatios_All` (which ExternalNonLinearRatio error-stops on) is reachable only via
+  the 21cm power path (fortran/results.f90:4153, guarded by NonLinear /= None and /= Lens
+  inside the 21cm PK function, single-redshift only). TT/TE/EE/phiphi and Pk_grid never hit
+  it — risk R7 downgraded to "21cm outputs unsupported".
+- numba 0.60 is pinned in ALL Cocoa env files (cocoapy310*.yml) — no new dependency needed
+  for axionHMcode's @njit paths.
+- InitPower attribute names on the ctypes class (camb/initialpower.py:128-136): `ns`,
+  `pivot_scalar` (Mpc^-1), `As` — read off results.Params.InitPower after the cobaya
+  wrapper sets them (camb.py:714, before the ratio callback at :717).
+- axionHMcode notebook ground truth (example_file.ipynb): mass grid
+  `M_arr = np.logspace(cosmo_dic['M_min'], cosmo_dic['M_max'], 100)` — M_min/M_max are
+  LOG10 EXPONENTS (7, 18 in input_file.txt); the linear defaults in load_cosmology.py
+  (1e8/1e17) are inconsistent with this usage — an upstream quirk; our cosmo_dic must use
+  the exponent convention. `func_full_halo_model_ax` returns a tuple; element [0] is the
+  total nonlinear P(k). One power_spec_dic instance is passed everywhere (no separate
+  sigma dict in the notebook flow).
+- Port doc gap (candidate Phase-5 fix): the MatterTransferData class docstring in
+  camb/results.py lists transfer indices only through 13 — Transfer_axion = 14 is missing
+  from the docs (the code itself is correct).

@@ -76,9 +76,11 @@ Any order-of-magnitude surprise flags a plumbing bug.
 Performance is not a constraint (PI, 2026-07-01), so the grids must be demonstrated
 converged, not merely affordable. At a representative DM-like point (fax=0.3, m=1e-24 eV)
 and one extreme corner (fax near prior edge):
-- double nk; double nz (if any thinning below the full PK_redshifts grid is ever proposed,
-  this test decides it);
-- refine the halo-mass integration grid M and widen [M_min, M_max] one decade each way;
+- double nk; double nz (if any thinning below the full `results.transfer_redshifts` grid
+  is ever proposed, this test decides it);
+- refine the halo-mass integration grid M (notebook default 100 logspaced points; the
+  HMcode reference values are 129/1025) and widen the [M_min, M_max] exponents one decade
+  each way;
 - tighten axionHMcode's internal root-finding/integration tolerances where exposed.
 Converged means lensed TT/EE/TE shift < 0.1% and C_L^phiphi shifts < 0.5% — an order of
 magnitude below the model-to-model differences the science case rests on (Gaughan et al.:

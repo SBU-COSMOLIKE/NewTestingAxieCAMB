@@ -42,9 +42,11 @@ that is the wrong level; it is a class attribute of the camb theory block
   read class options (version basic/dome, mass-grid size, the `strict` validity flag,
   optional fixed nuisance values alpha_1, alpha_2, gamma_1, gamma_2).
 - `get_requirements()`: `{"CAMB_transfers": None}`. Nothing else — every cosmological number
-  is read from the results object at call time, so the class needs no sampled params of its
-  own (unless we later expose the Dentler nuisance parameters as sampled — see
-  [[axionhmcode-open-questions]]).
+  is read from the results object at call time. Nuisance params alpha_1/alpha_2/gamma_1/
+  gamma_2 enter as Theory-block parameters per collaborator guidance (question 1).
+- Method naming rule (R11): cobaya registers every `get_*` method on the subclass as a
+  providable product (theory.py:173, tools.py:937-948). Exactly ONE public getter —
+  `get_non_linear_ratio` — everything else underscore-prefixed.
 - `get_non_linear_ratio(self, results)` — the whole physics pipeline:
   1. Cosmology from `results.Params`: h = H0/100, ombh2, omch2, As/ns/pivot from
      `InitPower` (power-law assumed — document), axion m_ax/omaxh2 and regime flag
@@ -73,11 +75,18 @@ that is the wrong level; it is a class attribute of the camb theory block
 - k: the transfer k grid (or a log subset); CAMB clamps outside the grid
   (ExternalNonLinearRatio.f90:81-85), so cover [k_min_transfer, kmax_yaml≈10 h/Mpc].
 - z: ACCURACY-FIRST POLICY (PI, 2026-07-01 — performance is explicitly not a constraint):
-  evaluate axionHMcode at every redshift CAMB actually uses, i.e. the full
-  `results.Params.Transfer.PK_redshifts[:PK_num_redshifts]` grid (the trivial-test pattern,
-  test_cosmo_multi_theory.py:287-292), which under NonLinear_both is augmented internally
-  for the lensing sources — log its actual content at runtime in Phase 0 to confirm
-  coverage. No coarse-grid/interpolation shortcut unless a convergence test (V6) proves it
+  evaluate axionHMcode at every redshift CAMB actually uses. CORRECTION (review pass,
+  2026-07-01): that grid is `np.array(results.transfer_redshifts)` (CAMBdata field,
+  results.py:226; sort ascending before set_ratio) — NOT
+  `results.Params.Transfer.PK_redshifts`. The trivial-test pattern
+  (test_cosmo_multi_theory.py:287-292) reads PK_redshifts and works only because that
+  test requests no lensed Cls; with NonLinear_lens/both + DoLensing,
+  `GetComputedPKRedshifts` (fortran/results.f90:1168) builds the master grid as the union
+  of the user PK_redshifts and an internal nonlinear-lensing (NLL) grid of
+  nint(50*NL_Boost) redshifts linearly spaced in [0, 10] ([0, 15] if
+  NL_Boost = AccuracyBoost*NonlinSourceBoost >= 2.5), and only `transfer_redshifts`
+  carries the union. Phase-0 runtime logging remains as confirmation. No
+  coarse-grid/interpolation shortcut unless a convergence test (V6) proves it
   changes lensed C_ell and C_L^phiphi below the numerical targets; cost alone never
   justifies thinning. If per-step cost ever becomes prohibitive for production MCMC, the
   escape hatch is an ML emulator trained on THIS pipeline's output (same
