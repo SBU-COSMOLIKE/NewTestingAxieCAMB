@@ -174,9 +174,17 @@ Warnings / known differences (carried over or documented)
   warning.
 - The **growth-rate (Transfer_f) column** of the original is disabled there and was
   not ported; modern CAMB's own growth outputs are available.
-- The **non-linear mode** is inherited from axionCAMB and not extensively tested;
-  ``halofit_version = 1`` (original) is suggested — Takahashi was found unstable for
-  axion models.
+- The **non-linear mode** is inherited from axionCAMB and not extensively tested.
+  Two supported paths: ``halofit_version = 1`` (original; the AxiECAMB-validated
+  treatment — Takahashi was found unstable for axion models), and HMcode
+  (``mead2020`` etc.), which has been made axion-consistent: the exact axion
+  background (KG/EFA density and equation of state) enters HMcode's internal
+  expansion and growth as a separate component, and DM-like axions (m/H0 >= 10)
+  count as fully clustering cold matter in the halo-model quantities (Omega_m,
+  the sigma(R)-mass mapping, the EH99 cold ratio, f_nu and the Dolag reference) —
+  i.e. no Jeans-scale halo suppression is modelled (the linear input P(k) carries
+  the scale-dependence). DE-like axions affect HMcode only through the expansion.
+  Non-axion HMcode results are bit-identical to upstream (all changes gated).
 - For z > 0 transfer outputs, mind whether the requested z is before or after the
   switch: the axion density contrast is defined differently in the two regimes.
 - P(k) at wavenumbers where the spectrum is suppressed by >~ 6 orders of magnitude
@@ -5729,3 +5737,95 @@ Comment changes: ``do_nonlinear`` help no longer lists option 3; ``initial_condi
 8. **Build:** the only structural build change to port is adding the axion background module with a dependency on the parameters module (axion_background.o: modules.o), compiled before equations. ``cmbmainOMP.f90`` is shipped but never compiled — confirm with the cmbmain analyst that nothing in it is load-bearing.
 9. **init_massive_nu(P%omegan/=0) must run before the axion background solver** (driver:519) because ``w_evolve`` evaluates massive-nu background densities; in 1.6.7 ensure the nu interpolation tables are initialized before the ULA ``Init``.
 
+
+
+axionHMcode nonlinear boost integration (2026-07-01)
+====================================================
+
+This section documents the second project phase built on the port: feeding the
+**axionHMcode** mixed-dark-matter nonlinear boost B(k,z) = P_NL/P_L
+(Vogt et al., `arXiv:2209.13445 <https://arxiv.org/abs/2209.13445>`_; Dome et al.
+recalibration, `arXiv:2409.11469 <https://arxiv.org/abs/2409.11469>`_) into AxiECAMB
+through Cobaya, so lensed TT/TE/EE and the lensing potential C_L^phiphi are computed
+with a Jeans-scale-aware nonlinear prescription (science context:
+`arXiv:2605.12054 <https://arxiv.org/abs/2605.12054>`_). Full design notes, decisions
+and measured validation numbers live in ``strategy_axionHMcode/`` (start at
+``00-INDEX.md``); the implementation is in ``axionhmcode_boost/`` (see its README
+for options), with example inputs ``EXAMPLE_AXIONHMCODE_EVALUATE1.yaml`` and
+``EXAMPLE_AXIONHMCODE_MCMC1.yaml``.
+
+Architecture
+------------
+
+Cobaya >= 3.6.2 splits the ``camb`` block into two graph nodes (``camb.transfers``
+runs the Boltzmann solve once; ``camb`` assembles spectra) and, with
+``use_non_linear_ratio: True``, calls ``provider.get_non_linear_ratio(results)``
+from inside its own ``calculate()``, passing the transfers-level CAMBdata as an
+argument. The ``AxionHMcodeBoost`` Theory class (``axionhmcode_boost/``) therefore
+requires only ``CAMB_transfers`` — no dependency cycle exists — and extracts the
+linear transfer functions itself via ``get_matter_transfer_data()`` (never the
+power-spectrum getters, which would invoke the not-yet-configured nonlinear model).
+The boost is evaluated at every redshift CAMB uses, read from
+``results.transfer_redshifts`` (under nonlinear lensing this includes the internal
+grid of nint(50 x AccuracyBoost x NonlinSourceBoost) nodes, linear in z on [0, 10];
+``Params.Transfer.PK_redshifts`` does NOT contain it). No Cobaya patches are needed;
+Fortran side unchanged (``ExternalNonLinearRatio`` was already part of the port).
+
+Boost convention
+----------------
+
+Numerator and denominator both live in axionHMcode's Eq. 9 decomposition. The
+denominator is the model's own linear limit, a perfect square::
+
+    sqrt(P_L_eq9) = (O_db/O_m) sqrt(P_cold)
+                    + (O_ax/O_m) [fc sqrt(P_cold) + (1-fc) sqrt(P_ax)]
+
+so B -> 1 at low k by construction (verified to <= 6e-4) and CAMB's own linear
+total (which includes massive neutrinos, outside axionHMcode's budget) is untouched
+there. P_cold comes from the cdm+baryon transfer combination (== Transfer_nonu;
+the axion is in Transfer_tot iff DM-like — verified numerically in both regimes).
+Below omaxh2 = 1e-8 the class switches to axionHMcode's own LCDM recipe
+(cold-only halo model; the full axion assembly is singular at vanishing fraction).
+
+Validity domain
+---------------
+
+DE-like axions (m/H0 < 10) and z grids reaching the KG->EFA switch hard-error
+regardless of the ``strict`` yaml flag (the mixed-DM halo model is undefined
+there; use ``halofit_version: original`` for DE-like masses). Out-of-calibration
+axion fractions/masses warn-and-extrapolate (``strict: False``, default, the
+2605.12054 practice) or hard-error (``strict: True``). The lensing z grid
+inherently exceeds dome's 1 < z < 8 calibration — logged once, not gated.
+Power-law primordial spectra only. Target mass window: m_ax ~ 1e-25..1e-23 eV.
+
+Validation summary (details in strategy_axionHMcode/13-*.md)
+------------------------------------------------------------
+
+- Trivial-ratio and ratio==1 nulls: machine precision (1e-15/1e-13).
+- External mead2020 ratio through the plumbing reproduces internal mead2020
+  lensed spectra to <= 3.2e-5 (Cpp, L <= 1000).
+- Transfer->P(k) convention identity: 5.7e-8; sigma8 cross-check exact to 4 digits.
+- LCDM limit vs CAMB HMcode-2020: -10%/+12% at k = 1 h/Mpc (basic/dome), the
+  agreement level the axionHMcode papers themselves claim.
+- Gaughan/Green/Moss reproduction (fax = 0.3, m = 1e-23/-24/-25): boost-ratio
+  ordering, signs and magnitudes match their Fig. 1 (e.g. basic m=1e-24 z=2
+  R(k=1) = 0.47 vs their ~0.5); lensed-spectra differences match Figs. 2-3
+  (dome dCpp(L=1000) = +33% vs their ~+35-40%).
+- Cross-check vs this branch's axion-aware internal HMcode: <= 0.2% in TT,
+  +10%/+22% in Cpp at L = 500/1000 — two different halo models, as expected.
+- Numerical convergence: mass-grid and k-density converged below 1.3e-3 in B
+  (well under the 0.1% TT / 0.5% Cpp targets). Never thin the input k grid:
+  halving it corrupts B by up to 11% at k ~ 1 (alpha/k_star sensitivity).
+- Pending: the full-likelihood evaluate/MCMC (needs cobaya-install data);
+  wiring smoke-tested at 83.6 s/eval (dome, 50-node grid, single core;
+  ``processes: N`` divides wall time with identical numerics).
+
+Environment requirements
+------------------------
+
+numpy < 2 (this port's python layer is not numpy-2 compatible), scipy < 1.14
+(axionHMcode has a dead ``scipy.misc`` import; the Theory class shims it when
+absent), numba, astropy, cobaya >= 3.6.2. Note cobaya >= 3.6 removed
+``use_renames`` (renames are unconditional now): the older
+``EXAMPLE_EVALUATE1/MCMC1.yaml`` need that key removed to run on pristine
+cobaya >= 3.6 (they still work on Cocoa, whose camb.yaml defines the key).
