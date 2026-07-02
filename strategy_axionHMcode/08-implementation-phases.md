@@ -12,11 +12,17 @@ discipline: compile checkpoints + null tests every time).
 
 ## Phase 0 — baselines and benchmarks (no new code)
 
-- Everything in this phase runs inside the ACTIVE Cocoa environment — conda cocoapy310 +
-  the .local pip overlay, i.e. after `source start_cocoa.sh`, prompt `(cocoa)(.local)` —
-  not the bare conda env and not the system python 3.9 used during the original port.
-  Includes a numba smoke test (`import numba` + trivial @njit) against the overlaid
-  numpy 1.26.3 ([[axionhmcode-verified-facts]] "two-layered").
+- Two-track environment policy (PI, 2026-07-01): for TESTING (Phases 0-2) a plain
+  `pip install "cobaya>=3.6.2"` environment suffices — no Cocoa needed. 3.6.2 is the
+  version at Cocoa's pinned commit (899f30a4 = the 3.6.2 version bump, 2026-03-27), and
+  the last camb.py change before it is PR#480 itself (commit 975a9413), so pip cobaya
+  >= 3.6.2 has the identical use_non_linear_ratio mechanism (the port was already
+  validated this way — EXAMPLE_EVALUATE1.yaml header, cobayapristine env). Cocoa's
+  (cocoa)(.local) environment becomes mandatory at Phase 3 (staging, Cocoa likelihoods,
+  end-to-end V5). Before Phase 3: run the environment smoke tests inside (cocoa)(.local)
+  — python 3.10, `import numba` + trivial @njit against the overlaid numpy 1.26.3
+  ([[axionhmcode-verified-facts]] "two-layered"). Write all code 3.10-compatible from the
+  start regardless of the testing env.
 - Build New_AxiECAMB main branch (serial make; miniforge gfortran 14.3; SDKROOT quirks —
   [[axiecamb-port-project]]).
 - Run the existing python test suite + EXAMPLE_EVALUATE1.yaml to confirm the starting state.

@@ -17,6 +17,12 @@ The checkout is not a floating master: Cocoa pins it via
 (`cocoa/Cocoa/set_installation_options.sh:220`, consumed in setup_cobaya.sh:122-124).
 All facts below are therefore stable under Cocoa reinstalls.
 
+The pinned commit IS the cobaya 3.6.2 version bump (2026-03-27), and the last camb.py
+change before it is PR#480 itself (commit 975a9413) — so a plain
+`pip install "cobaya>=3.6.2"` contains the identical use_non_linear_ratio machinery.
+Consequence (PI, 2026-07-01): Phases 0-2 testing can use pip cobaya outside Cocoa;
+Cocoa's patched clone only matters for likelihood plumbing, not for the mechanism.
+
 - `use_non_linear_ratio: bool` class attribute: `cobaya/theories/camb/camb.py:263`; yaml
   default False at `cobaya/theories/camb/camb.yaml:26`. It is a TOP-LEVEL camb option, not
   an extra_args entry.
