@@ -9,7 +9,7 @@ and applied consistently to P(k), lensed TT/TE/EE, and C_L^phiphi.
 
 Physics: Vogt et al. (arXiv:2209.13445, `version: basic`) and the Dome et al.
 recalibration (arXiv:2409.11469, `version: dome`, default). Validation targets
-and measured results live in `../strategy_axionHMcode/` (files 07, 11, 12).
+and measured results live in `../.claude/strategy_axionHMcode/` (files 07, 11, 12).
 
 ## Requirements
 
@@ -27,7 +27,7 @@ and measured results live in `../strategy_axionHMcode/` (files 07, 11, 12).
 ```yaml
 theory:
   camb:
-    path: ./external_modules/code/AxiECAMB
+    path: ./external_modules/code/axiecamb
     use_non_linear_ratio: True      # top-level camb option, NOT extra_args
     extra_args:
       num_massive_neutrinos: 1
@@ -35,7 +35,7 @@ theory:
       nonlinear: NonLinear_both
       lens_potential_accuracy: 4
   axionhmcode_boost.AxionHMcodeBoost:
-    python_path: ./external_modules/code/AxiECAMB/axionhmcode_boost
+    python_path: ./external_modules/code/axiecamb/axionhmcode_boost
     axionhmcode_path: ./external_modules/code/axionHMcode
     version: dome                   # 'dome' (default) | 'basic'
     strict: False                   # True: hard-error outside calibration

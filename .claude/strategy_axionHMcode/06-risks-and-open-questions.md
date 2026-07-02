@@ -32,18 +32,22 @@ metadata:
    sampler's override (single cosmology); the MCMC example fixes the mass, with yaml
    comments showing how to switch to the uniform log-mass prior. Full README-ready recipes:
    [[axionhmcode-mass-prior-recipes]] (file 09).
-4. **Staging decisions.** INTERIM ANSWER (PI, 2026-07-01): symlinks from the current
-   positions into external_modules/code (created and verified — see
-   [[axionhmcode-architecture]] "Staging into Cocoa"); no Cocoa scripts touched until the
-   pipeline works. STILL OPEN for the permanent mechanism: (a) clone script with pinned
-   commit for New_AxiECAMB; (b) axionHMcode vendored vs cloned, upstream vs group fork
-   (fork recommended — pinning + we may need to touch numba/global-state details).
-   Part (c) is ANSWERED (PI directive, 2026-07-01): the Theory block lives as its own
-   folder inside the New_AxiECAMB repo, committable alongside strategy_axionHMcode/
-   (see [[axionhmcode-architecture]] "Staging into Cocoa"). NEW CONSTRAINT (collaborator
-   guidance, 2026-07-01): whatever the permanent mechanism, preserve DRAG-AND-DROP
-   compatibility with future axionHMcode updates — call it only through public entry
-   points, never modify its files; any group fork is pin-only.
+4. **Staging decisions.** FULLY ANSWERED. (a)+(b) permanent mechanism (PI, 2026-07-02):
+   Cocoa scripts `installation_scripts/setup_axie_camb.sh` (clones the AxiECAMB repo,
+   pinned via AXIE_CAMB_GIT_COMMIT, into `external_modules/code/axiecamb` — CANONICAL
+   NAME, lowercase — applying Makefile/compiler patches from
+   `cocoa_installation_libraries/axiecamb_changes/`; also clones UPSTREAM
+   SophieMLV/axionHMcode, pinned via AXION_HMCODE_GIT_COMMIT, into
+   `external_modules/code/axionHMcode`) and `compile_axie_camb.sh` (setup.py build with
+   the RECOMBINATION_FILES variants), gated by INSTALL_AXIE_CAMB_V2 in
+   set_installation_options.sh. axionHMcode needs NO compile step: pure Python, no
+   packaging, deps already in the Cocoa layers; the only compilation is numba JIT once
+   per process (~7 s; upstream sets no cache=True, and drag-and-drop forbids adding it).
+   Part (c) (PI directive, 2026-07-01): the Theory block lives as its own folder inside
+   the New_AxiECAMB repo. CONSTRAINT (collaborator guidance, 2026-07-01): drag-and-drop
+   compatibility with axionHMcode updates — public entry points only, never modify its
+   files. Interim mac symlinks: the `AxiECAMB` symlink collides case-insensitively with
+   an `axiecamb` clone on macOS — remove it before running the setup script there.
 5. **Performance budget.** ANSWERED (PI, 2026-07-01): accuracy is the worry; performance is
    not a constraint. Consequences: (a) z-grid policy = dense — evaluate axionHMcode at every
    redshift CAMB actually uses (the full nonlinear-lensing-augmented

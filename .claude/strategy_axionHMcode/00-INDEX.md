@@ -18,7 +18,7 @@ All file:line references verified against the working tree on 2026-07-01.
 - [13-phase4-validation-report.md](13-phase4-validation-report.md) — full validation battery results: all nulls at machine precision, V2 ±12% vs mead2020, V3 Gaughan reproduction (match), V4 cross-check in band, V6 converged (never thin the k grid); V5 pending likelihood data
 
 Related prior work: the AxiECAMB port to CAMB 1.6.7 (see auto-memory `axiecamb-port-project`,
-this repo's `README.rst`, and the `hmcode` branch with the halofit-level axion-aware HMcode).
+this repo's `README.md` (+ `PORT_DEVELOPER_GUIDE.rst`), and the `hmcode` branch with the halofit-level axion-aware HMcode).
 Key papers live in `../../papers/` (rayne/papers/, outside this git repo — large PDFs, not
 committed; see 01 for the arXiv ids to re-download).
 

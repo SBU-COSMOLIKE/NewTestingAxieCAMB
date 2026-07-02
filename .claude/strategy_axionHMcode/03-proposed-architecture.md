@@ -138,9 +138,9 @@ Notes on the interim setup:
 - `axionHMcode` has no setup.py/pyproject (plain package folder with `__init__.py`) — the
   Theory class inserts its parent dir into sys.path. It uses numba — env dependency to
   check in Phase 0.
-- PI DIRECTIVE (2026-07-01): the Theory block, once built, is added as its OWN FOLDER inside
-  the New_AxiECAMB repo (committable, like strategy_axionHMcode/) — e.g.
-  `New_AxiECAMB/axionhmcode_theory/` (final name TBD) holding the Theory-class module plus
+- PI DIRECTIVE (2026-07-01): the Theory block, once built, is added as its OWN committable
+  FOLDER at the New_AxiECAMB repo root — built as
+  `New_AxiECAMB/axionhmcode_boost/` holding the Theory-class module plus
   its yaml defaults/examples. The yaml then references it via
   `python_path: ./external_modules/code/AxiECAMB/<folder>` (works through the symlink).
   Do NOT scatter it as loose files in the repo root.

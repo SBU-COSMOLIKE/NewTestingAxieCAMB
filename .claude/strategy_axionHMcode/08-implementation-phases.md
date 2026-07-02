@@ -60,9 +60,10 @@ discipline: compile checkpoints + null tests every time).
   get_requirements = CAMB_transfers, get_non_linear_ratio(results) wrapping the
   Phase-1 pipeline, class options (version, grids, the `strict` validity flag,
   nuisance values).
-- PI directive (2026-07-01): deliver it as its own folder inside the New_AxiECAMB repo
-  (committable, sibling of strategy_axionHMcode/) — module + yaml defaults/examples in one
-  place, referenced from yamls via python_path through the external_modules symlink.
+- PI directive (2026-07-01): deliver it as its own committable folder (axionhmcode_boost/)
+  at the New_AxiECAMB repo root — module + yaml defaults/examples in one place, referenced
+  from yamls via python_path through the external_modules symlink. (These strategy notes
+  were moved under .claude/ on 2026-07-02; the boost folder stays at the repo root.)
 - Unit-level test mirroring TrivialNonLinearRatio but with the real class on a fixed
   cosmology; compare against the Phase-1 script outputs (must be identical — same code).
 - Checkpoint: cobaya get_model + loglikes runs on a laptop-scale likelihood set.
