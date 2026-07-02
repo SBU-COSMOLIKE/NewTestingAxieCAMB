@@ -321,13 +321,26 @@ astropy 6.1.7 (mirroring the Cocoa pins). Full write-ups:
 P_NL^axion/P_NL^LCDM at z = {0, 2} for m = 1e-23/-24/-25 reproduce their Fig. 1
 structure: dome boosted above unity, basic suppressed below, suppression deepening
 toward lower mass and higher z — e.g. basic m = 1e-24, z = 2 gives R(k=1) = 0.47 vs
-their ~0.5. Lensed-spectra differences vs LCDM (m = 1e-24): dome dTT oscillatory,
+their ~0.5:
+
+<p align="center">
+  <img width="850" alt="Our nonlinear P(k) ratio curves (dome red, basic blue) for three axion masses at z=0 and z=2, with open circles marking approximate read-offs from Gaughan/Green/Moss Fig. 1" src="axionhmcode_boost/dev_scripts/gaughan_comparison_fig1.png">
+</p>
+
+Lensed-spectra differences vs LCDM (m = 1e-24): dome dTT oscillatory,
 +0.97% at l = 2400 (their Fig. 2 red reaches ~+2-3% by l ~ 3000); dome dCpp
 +3.0/+17.4/+32.6/+46.8% at L = 100/500/1000/2000 vs their Fig. 3 read-offs
 ~+4/+13/+26/+38; basic dCpp −2.6/−7.4/−17.2% at L = 500/1000/2000 vs their
-~−4/−10/−19. Overlay figures (our curves vs approximate read-offs from their published
-figures): `axionhmcode_boost/dev_scripts/gaughan_comparison_fig1.png` and
-`gaughan_comparison_fig23.png` (regenerate with `gaughan_comparison_plot.py`). Residual
+~−4/−10/−19:
+
+<p align="center">
+  <img width="850" alt="Lensed TT and lensing-potential fractional differences vs LCDM for m=1e-24 (dome red, basic blue), with error-barred open circles marking approximate read-offs from Gaughan/Green/Moss Figs. 2-3" src="axionhmcode_boost/dev_scripts/gaughan_comparison_fig23.png">
+</p>
+
+The open circles are **approximate read-offs from their published figures** (digitized
+by eye from high-resolution renders of the paper PDF; error bars indicate the reading
+uncertainty — they did not publish curve data). Regenerate both figures with
+`axionhmcode_boost/dev_scripts/gaughan_comparison_plot.py`. Residual
 dome offsets at the highest L and at m = 1e-23 (1.5 decades above the dome calibration
 pivot) are consistent with genuine inter-code differences: their linear inputs are
 AxiCAMB (standard-EFA lineage), ours AxiECAMB (Passaglia-Hu EFA), and the two differ
