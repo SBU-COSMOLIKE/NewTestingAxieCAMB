@@ -19,7 +19,8 @@ Ultralight-axion (ULA) physics on modern CAMB 1.6.7, with a Fortran driver, a Py
 7. [Appendix B: Validation against the original AxiECAMB](#appendix-b-validation-against-the-original-axiecamb)
 8. [Appendix C: the axionHMcode boost — implementation details](#appendix-c-the-axionhmcode-boost--implementation-details)
 9. [Appendix D: About the underlying CAMB](#appendix-d-about-the-underlying-camb)
-10. [Port developer guide (separate file)](PORT_DEVELOPER_GUIDE.rst)
+10. [Boost developer guide — the AxiECAMB ⊕ axionHMcode merge in depth (separate file)](BOOST_DEVELOPER_GUIDE.md)
+11. [Port developer guide (separate file)](PORT_DEVELOPER_GUIDE.rst)
 
 # Overview <a name="overview"></a>
 
@@ -31,7 +32,7 @@ This repository provides three ways to run the code and one add-on:
 - a **Cobaya** interface for MCMC that works with *unmodified* Cobaya;
 - an **axionHMcode nonlinear-boost** Cobaya theory block (`axionhmcode_boost/`) that feeds a mixed-dark-matter halo-model boost B(k,z) = P_NL/P_L into the lensed CMB and lensing-potential spectra.
 
-New users should read [The physics in brief](#the-physics-in-brief) and [Running AxiECAMB](#running-axiecamb); the appendices document the port internals (what was changed, validation), and the full [developer guide](PORT_DEVELOPER_GUIDE.rst) lives in a separate file.
+New users should read [The physics in brief](#the-physics-in-brief) and [Running AxiECAMB](#running-axiecamb); the appendices summarize the port internals (what was changed, validation). Two in-depth developer guides live in separate files: [BOOST_DEVELOPER_GUIDE.md](BOOST_DEVELOPER_GUIDE.md) (the complete record of the AxiECAMB ⊕ axionHMcode merge via the Cobaya theory block — mechanism, conventions, traps, and every measured validation number) and [PORT_DEVELOPER_GUIDE.rst](PORT_DEVELOPER_GUIDE.rst) (the change-by-change CAMB-1.6.7 port dossier).
 
 > [!NOTE]
 > When using the axion module, please cite [arXiv:2412.15192](https://arxiv.org/abs/2412.15192) and Passaglia & Hu 2022 ([arXiv:2201.10238](https://arxiv.org/abs/2201.10238)), on which the effective method builds. The original AxiECAMB heavily modified [axionCAMB](https://github.com/dgrin1/axionCAMB) (Hlozek et al., arXiv:1410.2896). For the axionHMcode boost, also cite Vogt et al. ([arXiv:2209.13445](https://arxiv.org/abs/2209.13445)) and Dome et al. ([arXiv:2409.11469](https://arxiv.org/abs/2409.11469)).
@@ -135,7 +136,7 @@ Both target the mass window `m_ax` ~ 1e-25..1e-23 eV, where the axion Jeans scal
     cobaya-run     EXAMPLE_AXIONHMCODE_EVALUATE1.yaml -p /path/to/packages
 
 > [!TIP]
-> Options (`version: dome|basic`, the `strict` validity flag, nuisance-parameter sampling, fork parallelism, ...) are documented in [`axionhmcode_boost/README.md`](axionhmcode_boost/README.md). The design rationale, conventions and measured validation live in `.claude/strategy_axionHMcode/` (start at `00-INDEX.md`); the implementation details are summarized in [Appendix C](#appendix-c-the-axionhmcode-boost--implementation-details).
+> Options (`version: dome|basic`, the `strict` validity flag, nuisance-parameter sampling, fork parallelism, ...) are documented in [`axionhmcode_boost/README.md`](axionhmcode_boost/README.md). For the full technical record of the merge — the Cobaya mechanism, the boost convention and its derivation, the traps, and every measured validation number — see **[BOOST_DEVELOPER_GUIDE.md](BOOST_DEVELOPER_GUIDE.md)**; a short summary is in [Appendix C](#appendix-c-the-axionhmcode-boost--implementation-details).
 
 # Warnings and known differences <a name="warnings-and-known-differences"></a>
 
@@ -179,7 +180,9 @@ Residuals at the 0.03-0.1% level are dominated by Nov13 <-> CAMB-1.6.7 baseline 
 
 # Appendix C: the axionHMcode boost — implementation details <a name="appendix-c-the-axionhmcode-boost--implementation-details"></a>
 
-This documents the second project phase built on the port: feeding the **axionHMcode** mixed-dark-matter nonlinear boost B(k,z) = P_NL/P_L (Vogt et al., [arXiv:2209.13445](https://arxiv.org/abs/2209.13445); Dome et al. recalibration, [arXiv:2409.11469](https://arxiv.org/abs/2409.11469)) into AxiECAMB through Cobaya, so lensed TT/TE/EE and the lensing potential C_L^phiphi are computed with a Jeans-scale-aware nonlinear prescription (science context: [arXiv:2605.12054](https://arxiv.org/abs/2605.12054)). Full design notes, decisions and measured validation numbers live in `.claude/strategy_axionHMcode/` (start at `00-INDEX.md`); the implementation is in [`axionhmcode_boost/`](axionhmcode_boost/README.md), with example inputs `EXAMPLE_AXIONHMCODE_EVALUATE1.yaml` and `EXAMPLE_AXIONHMCODE_MCMC1.yaml`.
+This summarizes the second project phase built on the port: feeding the **axionHMcode** mixed-dark-matter nonlinear boost B(k,z) = P_NL/P_L (Vogt et al., [arXiv:2209.13445](https://arxiv.org/abs/2209.13445); Dome et al. recalibration, [arXiv:2409.11469](https://arxiv.org/abs/2409.11469)) into AxiECAMB through Cobaya, so lensed TT/TE/EE and the lensing potential C_L^phiphi are computed with a Jeans-scale-aware nonlinear prescription (science context: [arXiv:2605.12054](https://arxiv.org/abs/2605.12054)).
+
+**The complete technical record of the merge is [BOOST_DEVELOPER_GUIDE.md](BOOST_DEVELOPER_GUIDE.md)** (mechanism, data flow, boost-convention derivation, implementation walkthrough, traps catalog, full validation numbers); the raw working documents live in `.claude/strategy_axionHMcode/` (start at `00-INDEX.md`). The implementation is in [`axionhmcode_boost/`](axionhmcode_boost/README.md), with example inputs `EXAMPLE_AXIONHMCODE_EVALUATE1.yaml` and `EXAMPLE_AXIONHMCODE_MCMC1.yaml`.
 
 ### Architecture
 
@@ -221,4 +224,7 @@ This code is built on CAMB 1.6.7 (Antony Lewis and Anthony Challinor, https://ca
 
 ---
 
-The complete port developer guide (change-by-change mapping, the modern-CAMB architecture map, and the exhaustive original-code analyses) is in **[PORT_DEVELOPER_GUIDE.rst](PORT_DEVELOPER_GUIDE.rst)**.
+The two in-depth developer guides live in separate files:
+
+- **[BOOST_DEVELOPER_GUIDE.md](BOOST_DEVELOPER_GUIDE.md)** — the AxiECAMB ⊕ axionHMcode merge via the Cobaya theory block: the no-cycle mechanism, end-to-end data flow, the boost convention and its derivation, the implementation walkthrough, the traps catalog, and every measured validation number.
+- **[PORT_DEVELOPER_GUIDE.rst](PORT_DEVELOPER_GUIDE.rst)** — the CAMB-1.6.7 port: change-by-change mapping, the modern-CAMB architecture map, and the exhaustive original-code analyses.

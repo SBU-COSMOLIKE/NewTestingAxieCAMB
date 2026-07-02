@@ -3,6 +3,10 @@
 Created 2026-07-01 from the prompt draft `prompt_draft_hmcode.tex`. Read in order.
 All file:line references verified against the working tree on 2026-07-01.
 
+These are the RAW working documents. The consolidated, self-contained developer
+guide distilled from them (for readers of the repository) is
+`../../BOOST_DEVELOPER_GUIDE.md` — keep the two in sync when decisions change.
+
 - [01-objective-and-deliverables.md](01-objective-and-deliverables.md) — what we are building and the constraints
 - [02-key-discovery-no-circular-dependency.md](02-key-discovery-no-circular-dependency.md) — the PR#480 mechanism already solves the CAMB↔axionHMcode cycle
 - [03-proposed-architecture.md](03-proposed-architecture.md) — the Theory-class design, data flow, and staging plan
