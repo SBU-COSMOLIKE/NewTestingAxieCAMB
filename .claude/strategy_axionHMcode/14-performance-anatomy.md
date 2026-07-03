@@ -196,6 +196,29 @@ delta_char/r_vir memo crumb ~15% on the solver, or numba cache=True on the
 fork (disk cache; would make repeat single-evaluates fast too, but touches
 many upstream decorators + cluster-FS fragile -- offered, not done).
 
+## Two cheap step-cost tricks (2026-07-03, PI: "5.5s still a bit high?")
+
+1. chunksize=1 on the worker pool (boost theory): the 50 z-nodes have ~2x
+   unequal costs; default block chunking made workers tail-wait on whoever
+   held the low-z block. One-node-at-a-time scheduling, ~50 tiny messages,
+   no numerics.
+2. Vectorized guess integral (fork, default solver mode only): the
+   integral_soliton quad is exactly the unit-amplitude soliton mass (the
+   scalar-r path of func_dens_profile_ax returns the soliton branch only),
+   evaluated by adaptive quad at ~21 scalar calls/mass = ~0.15 s/z, and in
+   default mode its value only seeds the bracket. Replaced with one
+   vectorized soliton evaluation on the cached weight grid. Legacy mode
+   keeps the quad verbatim (there the guess feeds the |guess-rho|>100
+   acceptance and must stay bit-identical).
+
+Verified: pytest 4/4; legacy gate byte-identical (1.59e-5); default-mode
+map deviations IDENTICAL to pre-change (guess provably seed-only) with per-z
+dome 0.43 -> 0.30-0.34 s. Steady-state 8-worker 50-node boost: 3.47 ->
+~2.5 s; expected Cocoa step ~4.3-4.5 s (was 5.5) incl. transfers 0.7 +
+assembly ~1.3. Remaining crumbs: persistent pool (~0.2-0.3 s/step, needs
+module-cache eviction for long chains), then the floor is CAMB assembly +
+transfers, not the boost.
+
 ## Round-4 DEFAULT FLIP (2026-07-03, PI: "lets make that version default and
 make the old one under a flag legacy_root_finder")
 

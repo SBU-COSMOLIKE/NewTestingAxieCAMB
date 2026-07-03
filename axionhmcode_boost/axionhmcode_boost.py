@@ -468,15 +468,22 @@ class AxionHMcodeBoost(Theory):
       # parent and skips the recompile. Without this, each evaluation forks
       # fresh un-compiled workers and re-pays the ~6 s compile every step
       # (measured: ~10 s/step cold vs ~5 s/step warmed).
+      # chunksize=1 hands the workers one redshift at a time. The default
+      # chunking would give each worker a contiguous block, but the nodes
+      # have very unequal costs (z = 0 is about twice as expensive as
+      # z = 10), so block scheduling leaves workers idle while one of them
+      # finishes the expensive low-z block. One-at-a-time scheduling is
+      # optimal here and the message overhead (~50 tiny payloads) is
+      # negligible.
       if not self._warmed:
         first_row = _compute_row(payloads[0])
         self._warmed = True
         with ctx.Pool(n_proc) as pool:
-          rest_rows = pool.map(_compute_row, payloads[1:])
+          rest_rows = pool.map(_compute_row, payloads[1:], chunksize=1)
         rows = [first_row] + rest_rows
       else:
         with ctx.Pool(n_proc) as pool:
-          rows = pool.map(_compute_row, payloads)
+          rows = pool.map(_compute_row, payloads, chunksize=1)
     else:
       rows = [_compute_row(payload) for payload in payloads]
 
