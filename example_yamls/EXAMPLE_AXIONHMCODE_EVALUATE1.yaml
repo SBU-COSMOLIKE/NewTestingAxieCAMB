@@ -193,6 +193,12 @@ theory:
     accuracy_boost: 1                  # scales the halo-mass grid and (with the
                                        # SBU-COSMOLIKE fork) its table node counts;
                                        # rerun at 2 to check convergence of the boost
+    legacy_root_finder: false          # false (default) = re-engineered soliton
+                                       # solver (bracketed brentq + diagnostics;
+                                       # requires the SBU-COSMOLIKE fork); true =
+                                       # released axionHMcode solver verbatim
+                                       # (bit-faithful to upstream). Always show
+                                       # this flag; keep it constant within a chain
 
 sampler:
   evaluate:

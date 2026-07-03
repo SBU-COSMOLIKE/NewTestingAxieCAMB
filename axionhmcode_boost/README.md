@@ -54,6 +54,7 @@ theory:
 | `m_min_exponent`, `m_max_exponent` | 7, 18 | log10 of the mass grid bounds (Msun/h) |
 | `model_flags` | `None` | expert overrides of the per-version axionHMcode call flags |
 | `accuracy_boost` | 1 | CAMB-style multiplier on the internal discretizations: scales `m_grid_points` and, when `axionhmcode_path` is the SBU-COSMOLIKE fork, its growth/G/sigma(M) table node counts. Rerun the same yaml at 1 and 2 and compare boost grids to check convergence (measured 1-vs-2 shift: max dB/B ~ 1e-3, dominated by the halo-mass grid) |
+| `legacy_root_finder` | `False` | solver mode. `False` (default) = the fork's re-engineered soliton solver: bracketed brentq + residual classification + per-evaluation diagnostics + continuous crossover cell; requires the SBU-COSMOLIKE fork; dome-version agreement with upstream measured <= 7e-5, basic-version differs up to 2e-2 because upstream's solver silently fails there (fork README appendix A.12). `True` = the released code's solver verbatim (hybr + the absolute distance-from-guess net), bit-faithful to upstream at max dB/B = 1.6e-5 — kept for upstream comparison and required for plain upstream checkouts. Show the flag in every yaml; keep it constant within a chain |
 
 Parallelism (deliberately not a yaml option): the redshift loop forks one
 worker per `OMP_NUM_THREADS` core (identical numerics, wall time only;

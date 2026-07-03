@@ -26,6 +26,24 @@ documented limitation, logged once, not gated by strict.
 Requires the AxiECAMB port (Transfer_axion variable) as the camb module and an
 unmodified axionHMcode checkout (called only through public entry points, so
 axionHMcode updates drop in).
+
+Reading guide (the order in which cobaya exercises this file):
+
+1. `AxionHMcodeBoost.initialize` — runs once at startup: checks the
+   axionHMcode checkout, imports it, resolves the yaml options, and decides
+   the worker count from OMP_NUM_THREADS.
+2. `AxionHMcodeBoost.get_requirements` — tells cobaya that this theory needs
+   the CAMB transfer functions (and nothing else; see the developer guide
+   for why requesting the power spectrum here would create a real
+   dependency cycle).
+3. `AxionHMcodeBoost.get_non_linear_ratio` — called by the CAMB wrapper on
+   every likelihood evaluation with the freshly computed transfers. It
+   validates the axion regime, builds one work package ("payload") per
+   redshift, runs `_compute_row` on each (in parallel worker processes when
+   OMP_NUM_THREADS > 1), and returns the boost grid.
+4. `_compute_row` — the physics: one redshift of the boost. Module-level
+   (outside the class) because forked worker processes must be able to call
+   it without carrying the cobaya machinery.
 """
 
 import os
@@ -70,9 +88,23 @@ _OMAXH2_LCDM = 1e-8
 
 
 def _compute_row(payload):
-  """One redshift of the boost grid; module-level so fork workers can run it.
+  """Compute one redshift of the boost grid: sqrt(P_NL/P_L) on the k grid.
 
-  All axionHMcode calls go through its public entry points only.
+  Arguments:
+    payload — a plain dictionary with everything this redshift needs
+      (cosmological densities in omega = Omega h^2 form, the axion mass in
+      eV, the primordial amplitude/tilt/pivot, the transfer-function columns
+      on the k grid in h/Mpc, the halo-mass grid in Msun/h, and the yaml
+      options). A plain dictionary — no cobaya objects — so that forked
+      worker processes can receive it cheaply.
+
+  Returns:
+    A 1-D numpy array over k: sqrt(B) with B = P_NL / P_L_eq9, the square
+    root because cobaya's non_linear_ratio convention is the ratio of
+    amplitudes, not of powers.
+
+  All axionHMcode calls go through its public entry points only (the
+  drag-and-drop constraint: upstream updates must drop in unchanged).
   """
   from axionCAMB_and_lin_PS import lin_power_spectrum
   from cosmology.overdensities import func_D_z_unnorm_int
@@ -81,15 +113,26 @@ def _compute_row(payload):
   from halo_model import PS_nonlin_axion
   from halo_model import PS_nonlin_cold
 
-  # accuracy_boost hook: only the SBU-COSMOLIKE fork has fast_tables;
-  # unmodified upstream has no tables to scale, so the hook is a no-op there
+  # fork hooks: only the SBU-COSMOLIKE fork has fast_tables; unmodified
+  # upstream has neither tables to scale nor a solver-mode switch, so both
+  # hooks are no-ops there (initialize() has already hard-errored if the
+  # default solver was requested without the fork). Payloads without the
+  # key — the standalone validation scripts — default to the legacy solver
+  # so that fork_validate keeps certifying the bit-faithful path.
   try:
     from cosmology import fast_tables
   except ImportError:
     pass
   else:
     fast_tables.set_accuracy_boost(payload.get("accuracy_boost", 1.0))
+    fast_tables.set_legacy_root_finder(
+      payload.get("legacy_root_finder", True))
 
+  # --- step 1: the cosmology dictionary, in axionHMcode's own conventions.
+  # Lower-case omega_X_0 are physical densities (omega = Omega h^2);
+  # upper-case Omega_X_0 are density fractions. Suffixes: b = baryons,
+  # d = cold dark matter only, ax = axion, db = cdm + baryons ("cold"),
+  # m = total matter, w = dark energy (flatness: Omega_w = 1 - Omega_m).
   z = payload["z"]
   h = payload["h"]
   cd = {
@@ -104,24 +147,46 @@ def _compute_row(payload):
     "m_ax": payload["m_ax"], "h": h, "z": z,
     "ns": payload["ns"], "As": payload["As"], "k_piv": payload["k_piv"],
   }
-  for key in ("b", "d", "ax", "db", "m"):
-    cd[f"Omega_{key}_0"] = cd[f"omega_{key}_0"] / h**2
+  cd["Omega_b_0"] = cd["omega_b_0"] / h**2
+  cd["Omega_d_0"] = cd["omega_d_0"] / h**2
+  cd["Omega_ax_0"] = cd["omega_ax_0"] / h**2
+  cd["Omega_db_0"] = cd["omega_db_0"] / h**2
+  cd["Omega_m_0"] = cd["omega_m_0"] / h**2
   cd["Omega_w_0"] = 1 - cd["Omega_m_0"]
+  # G_a is the HMcode-2020 integrated growth (eq. A5), a single number per
+  # (cosmology, redshift) that axionHMcode expects precomputed in cosmo_dic
   cd["G_a"] = func_D_z_unnorm_int(z, cd["Omega_m_0"], cd["Omega_w_0"])
+  # optional Dentler et al. nuisance parameters: axionHMcode activates them
+  # simply by their presence as keys in the cosmology dictionary
   for name, value in payload["nuisance"].items():
     if value is not None:
       cd[name] = value
 
+  # --- step 2: linear power spectra from the transfer-function columns.
   k = payload["k"]
-  t2p = lambda T: lin_power_spectrum.transfer_to_PS(k, T, cd)
-  cold_T = (cd["Omega_b_0"] * payload["T_b"]
-            + cd["Omega_d_0"] * payload["T_cdm"]) / cd["Omega_db_0"]
-  pd = {"k": k, "power_total": t2p(payload["T_tot"]),
-        "power_CDM": t2p(payload["T_cdm"]),
-        "power_baryon": t2p(payload["T_b"]),
-        "power_cold": t2p(cold_T),
-        "power_axion": t2p(payload["T_ax"])}
 
+  def power_from_transfer(transfer):
+    """Linear P(k) in (Mpc/h)^3 from one transfer-function column, using
+    axionHMcode's own primordial power-law conventions (upstream function
+    transfer_to_PS; k in h/Mpc, transfers in the CAMB output convention)."""
+    return lin_power_spectrum.transfer_to_PS(k, transfer, cd)
+
+  # "cold" = the density-weighted combination of cdm and baryons, the field
+  # the halo model builds its halos from (Dome et al., footnote to eq. 37)
+  cold_transfer = (cd["Omega_b_0"] * payload["T_b"]
+                   + cd["Omega_d_0"] * payload["T_cdm"]) / cd["Omega_db_0"]
+  pd = {"k": k,
+        "power_total": power_from_transfer(payload["T_tot"]),
+        "power_CDM": power_from_transfer(payload["T_cdm"]),
+        "power_baryon": power_from_transfer(payload["T_b"]),
+        "power_cold": power_from_transfer(cold_transfer),
+        "power_axion": power_from_transfer(payload["T_ax"])}
+
+  # --- step 3: the halo model. HMCode_param_dic derives the cold
+  # HMcode-2020 parameters (sigma(M), formation redshifts, damping scales);
+  # func_axion_param_dic derives the axion quantities (cut mass, soliton
+  # central densities, clustered fraction); func_full_halo_model_ax
+  # assembles the nonlinear total power spectrum.
   flags = payload["flags"]
   M_arr = payload["M_arr"]
   hmc = HMcode_params.HMCode_param_dic(cd, k, pd["power_cold"])
@@ -136,6 +201,7 @@ def _compute_row(payload):
       two_halo_damping=flags["two_halo_damping"],
       concentration_param=flags["concentration_param"],
       full_2h=flags["full_2h"], axion_dic=None)
+    # out is a tuple; element [0] is the total nonlinear P(k)
     return np.sqrt(np.asarray(out[0]) / pd["power_cold"])
 
   axd = axion_params.func_axion_param_dic(
@@ -143,13 +209,22 @@ def _compute_row(payload):
   out = PS_nonlin_axion.func_full_halo_model_ax(
     M_arr, pd, cd, hmc, axd, **flags)
 
+  # --- step 4: the boost denominator — the model's own linear limit
+  # (the "Eq. 9 convention" of the developer guide). It is a perfect
+  # square by construction, assembled from the same ingredients the halo
+  # model uses, so B -> 1 at low k exactly:
+  #   sqrt(P_L) = w_db sqrt(P_cold) + w_ax [fc sqrt(P_cold)
+  #                                         + (1 - fc) sqrt(P_axion)]
+  # with w_db, w_ax the density weights and fc the clustered axion fraction.
   fc = float(axd["frac_cluster"])
-  wdb = cd["Omega_db_0"] / cd["Omega_m_0"]
-  wax = cd["Omega_ax_0"] / cd["Omega_m_0"]
-  sqc = np.sqrt(pd["power_cold"])
-  sqa = np.sqrt(pd["power_axion"])
-  sqrt_pl_eq9 = wdb * sqc + wax * (fc * sqc + (1 - fc) * sqa)
-  return np.sqrt(np.asarray(out[0])) / sqrt_pl_eq9
+  weight_db = cd["Omega_db_0"] / cd["Omega_m_0"]
+  weight_ax = cd["Omega_ax_0"] / cd["Omega_m_0"]
+  sqrt_power_cold = np.sqrt(pd["power_cold"])
+  sqrt_power_axion = np.sqrt(pd["power_axion"])
+  sqrt_linear_eq9 = (weight_db * sqrt_power_cold
+                     + weight_ax * (fc * sqrt_power_cold
+                                    + (1 - fc) * sqrt_power_axion))
+  return np.sqrt(np.asarray(out[0])) / sqrt_linear_eq9
 
 
 class AxionHMcodeBoost(Theory):
@@ -179,6 +254,20 @@ class AxionHMcodeBoost(Theory):
   # and compare the boost grids to check convergence; 1 = the validated
   # defaults, so results are unchanged unless the flag is set.
   accuracy_boost: float = 1.0
+  # Solver mode (PI decision 2026-07-03: the re-engineered solver is the
+  # default). False (default): bracketed brentq with residual
+  # classification, closest-achievable acceptance for unreachable targets,
+  # per-evaluation diagnostics, and a continuously interpolated soliton/NFW
+  # crossover cell — requires the SBU-COSMOLIKE fork; validated by
+  # dome-version agreement with upstream (<= 7e-5 in B), attributed
+  # basic-version differences, and posterior-point delta-chi2 (fork README
+  # appendix A.12). True: the released code's solver verbatim —
+  # optimize.root(hybr) with the |guess - rho_c| > 100 acceptance net —
+  # bit-faithful to upstream (max |dB/B| = 1.6e-5, the fork_validate gate);
+  # kept for upstream comparison, and the only mode a plain upstream
+  # checkout supports. Keep the flag visible in every yaml and constant
+  # within a chain.
+  legacy_root_finder: bool = False
   # override individual axionHMcode call flags (expert use; V6 territory)
   model_flags: dict | None = None
   # Parallelism note (not a yaml option by design): the redshift loop forks
@@ -215,6 +304,25 @@ class AxionHMcodeBoost(Theory):
     # workers inherit the compiled numba state
     from halo_model import PS_nonlin_axion  # noqa: F401
     from axion_functions import axion_params  # noqa: F401
+    self.legacy_root_finder = bool(self.legacy_root_finder)
+    if not self.legacy_root_finder:
+      try:
+        from cosmology import fast_tables  # noqa: F401
+      except ImportError:
+        raise LoggedError(
+          self.log, "the default solver requires the SBU-COSMOLIKE "
+          "axionHMcode fork (cosmology/fast_tables.py not found in %s). "
+          "Point axionhmcode_path at the fork, or set "
+          "legacy_root_finder: true to run the plain upstream checkout "
+          "with its verbatim solver.", path)
+      self.log.info(
+        "solver: default (bracketed brentq + residual classification, "
+        "interpolated crossover cell); set legacy_root_finder: true for "
+        "the released code's verbatim behavior.")
+    else:
+      self.log.info(
+        "solver: legacy_root_finder (released axionHMcode verbatim; "
+        "bit-faithful to upstream).")
 
     self.version = str(self.version).lower()
     if self.version not in _VERSION_FLAGS:
@@ -250,10 +358,17 @@ class AxionHMcodeBoost(Theory):
         "calibrated fitting formulae (not gated by `strict`).")
 
   def get_requirements(self):
-    reqs = {"CAMB_transfers": None}
+    """Declare what this theory needs from the rest of the cobaya graph.
+
+    Only CAMB_transfers (the Boltzmann solve) — never the power spectrum,
+    which would create a genuine dependency cycle — plus, when nuisance
+    sampling is on, the four Dentler parameters as sampled inputs.
+    """
+    requirements = {"CAMB_transfers": None}
     if self.sample_nuisance:
-      reqs.update({name: None for name in _NUISANCE})
-    return reqs
+      for name in _NUISANCE:
+        requirements[name] = None
+    return requirements
 
   def get_non_linear_ratio(self, results):
     p = results.Params
@@ -329,6 +444,7 @@ class AxionHMcodeBoost(Theory):
         "m_min_exponent": self.m_min_exponent,
         "m_max_exponent": self.m_max_exponent,
         "accuracy_boost": self.accuracy_boost,
+        "legacy_root_finder": self.legacy_root_finder,
         "k": k, "T_cdm": td[_T_CDM - 1, :, iz], "T_b": td[_T_B - 1, :, iz],
         "T_ax": td[_T_AXION - 1, :, iz], "T_tot": td[_T_TOT - 1, :, iz],
       })
@@ -348,10 +464,21 @@ class AxionHMcodeBoost(Theory):
     return {"k_h": k, "z": z_raw[order], "ratio": ratio}
 
   def _nuisance_values(self):
+    """Current values of the four Dentler nuisance parameters, as a
+    name -> value dictionary (value None means "omit", in which case
+    axionHMcode falls back to its internal calibrated defaults).
+
+    Sampled mode reads them from the cobaya provider (they change every
+    likelihood evaluation); fixed mode reads the yaml options.
+    """
+    values = {}
     if self.sample_nuisance:
-      return {name: float(self.provider.get_param(name))
-              for name in _NUISANCE}
-    return {name: getattr(self, name) for name in _NUISANCE}
+      for name in _NUISANCE:
+        values[name] = float(self.provider.get_param(name))
+    else:
+      for name in _NUISANCE:
+        values[name] = getattr(self, name)
+    return values
 
   def _check_validity(self, omega_ax, omega_c, omega_b, m_ax):
     if self.version == "dome":

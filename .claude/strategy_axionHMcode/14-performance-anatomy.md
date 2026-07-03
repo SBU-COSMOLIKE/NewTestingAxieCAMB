@@ -173,6 +173,56 @@ the gate — replaced by a design that keeps the speed and passes:
    `processes: 1` lines — they must be deleted when the PI repins axiecamb
    (report-only tree). Full record: fork README appendix A.7-A.11.
 
+## Round-4 DEFAULT FLIP (2026-07-03, PI: "lets make that version default and
+make the old one under a flag legacy_root_finder")
+
+The re-engineered solver is now the DEFAULT; the released code's verbatim
+behavior lives behind `legacy_root_finder: true` (boost yaml option, shown
+in every yaml; fork API fast_tables.set_legacy_root_finder; payloads without
+the key default to LEGACY so fork_validate keeps certifying the bit-faithful
+path). Default mode requires the fork (hard error otherwise, message points
+to legacy_root_finder: true for upstream checkouts). Consequences: default
+timing ~0.4 s/z dome (vs 0.34 legacy); pytest runs the default now (4/4);
+gate rerun post-flip byte-identical (1.59e-5); default-mode map unchanged
+(dome <= 7.2e-5). Rationale: for dome the two modes agree at the table level
+while default has provable roots + diagnostics; "more correct" claim per
+mode documented in fork README A.12.
+
+## Round-4 OUTCOME (2026-07-03, PI: "solver + crossover together -> yes do both")
+
+aggressive_optimization flag implemented (boost yaml option, COSMOLIKE_
+AGGRESSIVE_MODE-style contract, shown explicitly in example yamls, forwarded
+to the fork like accuracy_boost; hard-errors if requested without the fork).
+Flag ON = bracketed brentq around the upstream guess + residual
+classification + per-evaluation diagnostics (cosmo_dic['_vm_agg_diag']:
+solved/gap_target/no_bracket) + interpolated crossover-cell correction
+(_ax_halo_mass_aggressive).
+
+TWO FINDINGS (collaborator-grade; fork README A.12):
+1. M_ax(rho_c) is DISCONTINUOUS by construction (crossover-detection
+   threshold jump = NFW envelope mass) -> unreachable targets exist (dome
+   gaughan z=0: 33/100 halos). Upstream hybr + |guess-rho|<100 silently
+   accepts closest-achievable; hard-rejecting instead corrupts everything
+   because func_axion_param_dic DELETES zero halos from M_int (interior
+   grid holes -> frac_cluster -1.3e5, NaN B — measured, then fixed by
+   adopting explicit closest-achievable acceptance counted as gap_target).
+2. Basic version, inputfile z=2: hybr returns NON-ROOT amplitudes for
+   18/59 halos (worst 3.5e3x off; the >100 net is absolute vs rho_c~1e-5
+   scale = filters nothing) and rejects 5 halos with valid roots ->
+   frac_cluster 0.147 (upstream) vs 0.200 (aggressive). Upstream basic-mode
+   soliton amplitudes are significantly solver-noise-polluted.
+
+Validation: flag-off byte-identical (gate 1.59e-5, pytest 4/4); flag-on
+dome <= 7.2e-5 vs upstream across validation cases; flag-on basic up to
+2.3e-2 (attributed to finding 2). Timing: aggressive dome ~0.40-0.44 s/z
+(slightly slower than strict 0.34 — bracket probing; value = robustness/
+diagnosability, not speed). V5 postprocess RESULT (PI's idea: re-evaluate
+all 115 accepted micro-MCMC points — real Planck+BAO+SN+ACT posterior,
+dome, legacy-solver chain — with the new default solver): max |dchi2| =
+2.76e-2, mean +1.6e-3, rms 5.2e-3. |dchi2| << 1 everywhere: chains under
+the two solvers are statistically indistinguishable. This is the sign-off
+evidence for the default flip (and for the collaborator packet).
+
 Remaining bottleneck structure (fork, dome z=0 ~0.73 s wall; re-profiled
 2026-07-03 post-round-2): the central-density solver stage 0.46 s cum (of
 which 0.26 s = ~26 hybr objective evaluations per mass x 100 masses, and
