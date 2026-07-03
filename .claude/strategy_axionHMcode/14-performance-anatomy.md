@@ -173,6 +173,29 @@ the gate — replaced by a design that keeps the speed and passes:
    `processes: 1` lines — they must be deleted when the PI repins axiecamb
    (report-only tree). Full record: fork README appendix A.7-A.11.
 
+## numba JIT warm-up (2026-07-03, PI: "8.7s still high for MCMC")
+
+Measured on a single Cocoa evaluate at OMP_NUM_THREADS=8: camb=8.97s where
+transfers=0.81s. Decomposed (dev_scripts jit_decompose / jit_mcmc_sim):
+single _compute_row cold 6.1s vs warm 0.40s -> the numba JIT floor is ~5.7s
+PER PROCESS. axionHMcode njit functions have NO cache=True, so every fresh
+process recompiles. The boost forks a new pool every get_non_linear_ratio and
+the PARENT never compiled (initialize only imports) -> every MCMC step's fresh
+workers recompiled: measured ~10s/step cold, all three consecutive steps.
+
+FIX (axionhmcode_boost.py): on the first evaluation, compute row 0 in the
+PARENT (which compiles numba) and keep the result; the pool then does only the
+rest. fork is copy-on-write, so every later evaluation's workers INHERIT the
+parent's compiled machine code for free. Measured: eval 1 = 9.3s (JIT folded
+in, no regression vs the old 8.7s single-eval), evals 2+ = 3.47-3.49s stable
+(8-worker, 50 z=0 nodes) -> ~2.5x on MCMC steps. Gate unchanged (1.59e-5),
+pytest 4/4: pure scheduling, zero numerics change. Single `evaluate` still
+pays the ~6s JIT once (unavoidable without a disk cache). Remaining levers:
+legacy_root_finder:true saves ~25% (0.34 vs 0.44 s/z; less correct solver),
+delta_char/r_vir memo crumb ~15% on the solver, or numba cache=True on the
+fork (disk cache; would make repeat single-evaluates fast too, but touches
+many upstream decorators + cluster-FS fragile -- offered, not done).
+
 ## Round-4 DEFAULT FLIP (2026-07-03, PI: "lets make that version default and
 make the old one under a flag legacy_root_finder")
 

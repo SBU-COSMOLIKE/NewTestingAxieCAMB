@@ -351,6 +351,9 @@ class AxionHMcodeBoost(Theory):
       self._n_processes,
       "" if "OMP_NUM_THREADS" in os.environ else " (unset, defaulting to 1)")
     self._warned = set()
+    # becomes True after the first evaluation compiles numba in this parent
+    # process (see get_non_linear_ratio); keeps the ~6 s JIT a one-time cost
+    self._warmed = False
     if self.version == "dome":
       self.log.info(
         "dome calibration covers 1 < z < 8; the CAMB lensing grid also needs "
@@ -453,8 +456,27 @@ class AxionHMcodeBoost(Theory):
     if n_proc > 1:
       import multiprocessing
       ctx = multiprocessing.get_context("fork")
-      with ctx.Pool(n_proc) as pool:
-        rows = pool.map(_compute_row, payloads)
+      # numba compiles axionHMcode's just-in-time functions the first time
+      # they run in a process, at a one-time cost of ~6 s. Worker processes
+      # are created by forking this (parent) process, and fork copies the
+      # parent's memory -- including numba's compiled machine code -- so if
+      # the parent has already compiled, the workers inherit it for free.
+      # On the first evaluation we therefore compute one redshift here in
+      # the parent (which compiles numba) and keep its result, so the pool
+      # only does the remaining redshifts: the first evaluation costs the
+      # same as before, but every later evaluation forks an already-warm
+      # parent and skips the recompile. Without this, each evaluation forks
+      # fresh un-compiled workers and re-pays the ~6 s compile every step
+      # (measured: ~10 s/step cold vs ~5 s/step warmed).
+      if not self._warmed:
+        first_row = _compute_row(payloads[0])
+        self._warmed = True
+        with ctx.Pool(n_proc) as pool:
+          rest_rows = pool.map(_compute_row, payloads[1:])
+        rows = [first_row] + rest_rows
+      else:
+        with ctx.Pool(n_proc) as pool:
+          rows = pool.map(_compute_row, payloads)
     else:
       rows = [_compute_row(payload) for payload in payloads]
 
