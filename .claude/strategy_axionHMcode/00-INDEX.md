@@ -20,6 +20,7 @@ guide distilled from them (for readers of the repository) is
 - [11-phase0-results.md](11-phase0-results.md) — measured Phase-0 results: V0a machine-precision pass, 50-node lensing grid confirmed, V1 convention pass, timings (1.3-2.7 s/z), astropy dependency
 - [12-phase1-results.md](12-phase1-results.md) — measured Phase-1 results: R3 semantics settled, perfect-square boost denominator verified (B→1 at low k), V0c machine-precision null, first physics spectra, kmax insensitivity
 - [13-phase4-validation-report.md](13-phase4-validation-report.md) — full validation battery results: all nulls at machine precision, V2 ±12% vs mead2020, V3 Gaughan reproduction (match), V4 cross-check in band, V6 converged (never thin the k grid); V5 pending likelihood data
+- [14-performance-anatomy.md](14-performance-anatomy.md) — profiled: why axionHMcode is ~1000× slower than HMcode (nested root-finds recomputing untabulated growth/σ(M): 109k growth + 99k variance integrals per redshift); cobaya timing accounting ("camb: 84 s" is the boost callback); upstream speedup estimates 10–100×
 
 Related prior work: the AxiECAMB port to CAMB 1.6.7 (see auto-memory `axiecamb-port-project`,
 this repo's `README.md` (+ `PORT_DEVELOPER_GUIDE.rst`), and the `hmcode` branch with the halofit-level axion-aware HMcode).

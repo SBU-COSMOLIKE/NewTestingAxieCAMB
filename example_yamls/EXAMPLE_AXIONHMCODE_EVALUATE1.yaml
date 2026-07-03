@@ -27,9 +27,12 @@
 # halofit_version: original path for those masses.
 #
 # Cost: one evaluation computes the boost at every node of CAMB's internal
-# nonlinear-lensing redshift grid (50 nodes at AccuracyBoost 1.0), at ~1.3 s
-# (basic) / ~2.7 s (dome) per node single-threaded. Set processes: N in the
-# boost block to divide the wall time (identical numerics).
+# nonlinear-lensing redshift grid (50 nodes at AccuracyBoost 1.0). Per node,
+# single-threaded, warm: ~1.3 s basic / ~2.7 s dome with upstream axionHMcode;
+# ~0.2 s basic / ~0.34 s dome with the SBU-COSMOLIKE fork (validated to
+# max |dB/B| = 1.6e-5 against upstream). The boost forks one worker per
+# OMP_NUM_THREADS core to divide the wall time (identical numerics; the
+# environment's core budget is always respected, no yaml override).
 
 stop_at_error: true
 debug: false
@@ -187,7 +190,9 @@ theory:
     axionhmcode_path: ../axionHMcode   # on Cocoa: ./external_modules/code/axionHMcode
     version: dome                      # 'dome' (default) | 'basic'
     strict: false                      # true: hard-error outside calibration
-    processes: 1
+    accuracy_boost: 1                  # scales the halo-mass grid and (with the
+                                       # SBU-COSMOLIKE fork) its table node counts;
+                                       # rerun at 2 to check convergence of the boost
 
 sampler:
   evaluate:

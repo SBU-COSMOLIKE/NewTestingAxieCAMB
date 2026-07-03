@@ -93,3 +93,17 @@ m ~ 1e-25..1e-23 eV); it matters if the pipeline is ever pushed to lighter masse
   DE-like/large-fax axions and their Weyl-potential mapping; possibly ratio-convention
   details for question 6).
 - The switch-problem leads above (Phase 1).
+- Dome flag configuration question (found 2026-07-02 on full re-read of 2409.11469;
+  PI decision: keep released-code defaults, documented in
+  axionhmcode_boost/README.md "The dome flag configuration" section). Dome et al.
+  Sec. 4.4 state the calibration ran with the halo bloating eta (their Eq. 57) and
+  the perturbative two-halo damping (their Eq. 55) active, so the Table 5 alpha fits
+  were calibrated jointly with them; the released code's README instead recommends
+  only `alpha = True` and `concentration_param = True` for the dome version and
+  leaves eta/two-halo damping off. Our defaults follow the released code and
+  reproduce Gaughan et al. Figs. 1-3 (V3). Question for collaborators/upstream:
+  should dome runs set `eta_given=True` and `two_halo_damping=True` to match the
+  Sec. 4.4 configuration? If yes, no code change:
+  `model_flags: {eta_given: True, two_halo_damping: True}` in the yaml. Expected
+  size of the difference: a few percent in the quasi-linear regime, inside the
+  model's 10-20% accuracy band.

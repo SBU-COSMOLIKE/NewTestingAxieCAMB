@@ -81,6 +81,15 @@ def _compute_row(payload):
   from halo_model import PS_nonlin_axion
   from halo_model import PS_nonlin_cold
 
+  # accuracy_boost hook: only the SBU-COSMOLIKE fork has fast_tables;
+  # unmodified upstream has no tables to scale, so the hook is a no-op there
+  try:
+    from cosmology import fast_tables
+  except ImportError:
+    pass
+  else:
+    fast_tables.set_accuracy_boost(payload.get("accuracy_boost", 1.0))
+
   z = payload["z"]
   h = payload["h"]
   cd = {
@@ -164,11 +173,20 @@ class AxionHMcodeBoost(Theory):
   m_grid_points: int = 100
   m_min_exponent: float = 7.0
   m_max_exponent: float = 18.0
+  # CAMB-style single accuracy multiplier: scales the halo-mass grid point
+  # count and, when the checkout is the SBU-COSMOLIKE fork, its internal
+  # growth/G/sigma(M) table node counts. Rerun the same yaml with 1 and 2
+  # and compare the boost grids to check convergence; 1 = the validated
+  # defaults, so results are unchanged unless the flag is set.
+  accuracy_boost: float = 1.0
   # override individual axionHMcode call flags (expert use; V6 territory)
   model_flags: dict | None = None
-  # fork-based parallelism over the redshift loop (wall time only, identical
-  # numerics; keep 1 under MPI unless you know your node layout)
-  processes: int = 1
+  # Parallelism note (not a yaml option by design): the redshift loop forks
+  # one worker per OMP_NUM_THREADS core (identical numerics, wall time only;
+  # falls back to 1 when unset). The environment's core budget is always
+  # respected — the same contract as every OpenMP code in Cocoa, and correct
+  # per MPI rank (each rank forks within its own allocation). There is
+  # deliberately no yaml override (PI decision, 2026-07-03).
 
   def initialize(self):
     if not self.axionhmcode_path:
@@ -204,8 +222,26 @@ class AxionHMcodeBoost(Theory):
                         sorted(_VERSION_FLAGS), self.version)
     self._flags = dict(_VERSION_FLAGS[self.version])
     self._flags.update(self.model_flags or {})
-    self._M_arr = np.logspace(self.m_min_exponent, self.m_max_exponent,
-                              self.m_grid_points)
+    self.accuracy_boost = float(self.accuracy_boost)
+    if not self.accuracy_boost > 0:
+      raise LoggedError(self.log, "accuracy_boost must be > 0, got %r",
+                        self.accuracy_boost)
+    n_m = max(20, int(round(self.m_grid_points * self.accuracy_boost)))
+    self._M_arr = np.logspace(self.m_min_exponent, self.m_max_exponent, n_m)
+    if self.accuracy_boost != 1.0:
+      self.log.info(
+        "accuracy_boost=%g: halo-mass grid %d points (base %d); fork table "
+        "node counts scaled by the same factor when the checkout is the "
+        "SBU-COSMOLIKE fork.", self.accuracy_boost, n_m, self.m_grid_points)
+    try:
+      env_threads = int(os.environ.get("OMP_NUM_THREADS", "") or 1)
+    except ValueError:
+      env_threads = 1
+    self._n_processes = max(1, env_threads)
+    self.log.info(
+      "z-loop fork parallelism: %d worker(s) from OMP_NUM_THREADS%s.",
+      self._n_processes,
+      "" if "OMP_NUM_THREADS" in os.environ else " (unset, defaulting to 1)")
     self._warned = set()
     if self.version == "dome":
       self.log.info(
@@ -292,14 +328,16 @@ class AxionHMcodeBoost(Theory):
         "M_arr": self._M_arr, "nuisance": nuisance,
         "m_min_exponent": self.m_min_exponent,
         "m_max_exponent": self.m_max_exponent,
+        "accuracy_boost": self.accuracy_boost,
         "k": k, "T_cdm": td[_T_CDM - 1, :, iz], "T_b": td[_T_B - 1, :, iz],
         "T_ax": td[_T_AXION - 1, :, iz], "T_tot": td[_T_TOT - 1, :, iz],
       })
 
-    if self.processes > 1:
+    n_proc = min(self._n_processes, len(payloads))
+    if n_proc > 1:
       import multiprocessing
       ctx = multiprocessing.get_context("fork")
-      with ctx.Pool(self.processes) as pool:
+      with ctx.Pool(n_proc) as pool:
         rows = pool.map(_compute_row, payloads)
     else:
       rows = [_compute_row(payload) for payload in payloads]

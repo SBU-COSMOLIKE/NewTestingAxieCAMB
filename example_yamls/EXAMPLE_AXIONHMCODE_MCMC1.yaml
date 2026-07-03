@@ -10,9 +10,11 @@
 # replace the fixed m_ax block below with the commented logmx/m_ax pair.
 #
 # Cost warning: every accepted point computes the boost on CAMB's internal
-# ~50-node lensing redshift grid (~1-3.5 min/eval single-threaded; see the
-# boost README). Set processes: N to divide wall time, or train an emulator
-# on this pipeline for production-scale chains.
+# ~50-node lensing redshift grid: ~17 s/eval (SBU-COSMOLIKE fork) to
+# ~1-3.5 min/eval (upstream) single-threaded; see the boost README. The
+# boost forks one worker per OMP_NUM_THREADS core to divide the wall time
+# (the environment's core budget is always respected, no yaml override);
+# train an emulator on this pipeline for production-scale chains if needed.
 
 stop_at_error: false
 debug: false
@@ -173,7 +175,9 @@ theory:
     axionhmcode_path: ../axionHMcode   # on Cocoa: ./external_modules/code/axionHMcode
     version: dome
     strict: false
-    processes: 1
+    accuracy_boost: 1                  # scales the halo-mass grid and (with the
+                                       # SBU-COSMOLIKE fork) its table node counts;
+                                       # rerun at 2 to check convergence of the boost
     # To also sample the Dentler nuisance parameters, set sample_nuisance: true
     # and add alpha_1/alpha_2/gamma_1/gamma_2 prior blocks to params
     # (Gaughan et al. priors: [0.6,2.0], [1.43,2.54], [5.0,45.0], [-0.37,-0.23])

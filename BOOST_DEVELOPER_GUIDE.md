@@ -221,8 +221,9 @@ One module, [`axionhmcode_boost/axionhmcode_boost.py`](axionhmcode_boost/axionhm
   cobaya registers every `get_*` method as a providable product, so helpers are
   underscore-prefixed.
 - **`_compute_row(payload)`** — one redshift of the grid, module-level so
-  `multiprocessing` fork workers can run it (`processes: N` divides wall time with
-  bit-identical numerics; keep 1 under MPI unless the node layout is understood).
+  `multiprocessing` fork workers can run it (one worker per `OMP_NUM_THREADS`
+  core, bit-identical numerics; the environment's core budget is always
+  respected, so the MPI-rank allocation is honored automatically).
   Per redshift it builds `cosmo_dic` exactly as axionHMcode's `load_cosmology_input`
   does — including their internal scale-independent growth
   `G_a = func_D_z_unnorm_int(z, Omega_m, Omega_w)` (`load_cosmology.py:204-205`),
@@ -349,14 +350,37 @@ most in exactly this mass range.
 # 10. Performance <a name="performance"></a>
 
 Measured warm (numba JIT paid; first call adds ~7 s per process): **1.3 s/redshift
-(basic), 2.7 s/redshift (dome)**, nk ~ 220. A lensed-Cl evaluation needs the full
-lensing grid — 50 nodes at AccuracyBoost 1 (75 at 1.5) — giving ~65-135 s per
-likelihood evaluation single-threaded; the smoke-tested end-to-end figure was 83.6 s
-(dome, 50 nodes). `processes: N` forks the z loop (identical numerics, wall time / N).
+(basic), 2.7 s/redshift (dome)**, nk ~ 220, with upstream axionHMcode. A lensed-Cl
+evaluation needs the full lensing grid — 50 nodes at AccuracyBoost 1 (75 at 1.5) —
+giving ~65-135 s per likelihood evaluation single-threaded; the smoke-tested
+end-to-end figure was 83.6 s (dome, 50 nodes). With the SBU-COSMOLIKE fork
+(VM-SPEEDUP rounds 1-3, 2026-07-02/03: growth/G/sigma tables, formation-z
+inversion, exact memoization, precomputed radial quadrature weights, and the
+FFTLog j0 profile transform; validated to max |dB/B| = 1.6e-5, full record in
+the fork README appendix) the same costs are **~0.2 s/redshift (basic),
+~0.34 s/redshift (dome)** — ~17 s per dome evaluation.
+The z loop is fork-parallelized with one worker per `OMP_NUM_THREADS` core
+(identical numerics, wall time / N; falls back to 1 when unset). The core
+budget always comes from the environment — the Cocoa/OpenMP contract, correct
+per MPI rank too; there is deliberately no yaml override (PI decision,
+2026-07-03: yaml must not be able to overrule OpenMP).
 Accuracy was prioritized by design decision (see the decision log): no grid thinning
 is permitted on cost grounds; if production MCMC cost becomes prohibitive, the intended
 path is training an ML emulator on this pipeline's output, dropping into the same
 `get_non_linear_ratio` interface.
+
+The `accuracy_boost` yaml option (added 2026-07-02, PI request, modeled on cosmolike's
+`Ntable.high_def_integration` and CAMB's `AccuracyBoost`) is the convergence
+instrument: one multiplier scales the halo-mass grid point count and — when
+`axionhmcode_path` is the SBU-COSMOLIKE fork — the fork's growth/G/sigma(M) table
+node counts (`cosmology/fast_tables.py:set_accuracy_boost`, forwarded by
+`_compute_row`; a plain upstream checkout silently ignores it). Rerunning the same
+yaml at 1 and 2 and comparing boost grids measures the total internal-discretization
+error. First measurement (dome z=0, Gaughan/input-file/LCDM cases): max |dB/B|
+between boost 1 and 2 is 0.7-1.1e-3, dominated by the halo-mass grid (the fork
+tables contribute <~ 2e-6), two orders below the halo-model calibration accuracy.
+It deliberately does NOT touch the input k grid (owned by CAMB's own accuracy
+settings; see the V6 warning — never thin it) or upstream-internal r grids.
 
 # 11. Validity domain and known limitations <a name="validity"></a>
 

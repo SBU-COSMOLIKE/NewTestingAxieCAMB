@@ -53,11 +53,58 @@ theory:
 | `m_grid_points` | 100 | halo-mass integration grid size |
 | `m_min_exponent`, `m_max_exponent` | 7, 18 | log10 of the mass grid bounds (Msun/h) |
 | `model_flags` | `None` | expert overrides of the per-version axionHMcode call flags |
-| `processes` | 1 | fork-parallelism over the redshift loop (identical numerics, wall time only; keep 1 under MPI unless the node layout is understood) |
+| `accuracy_boost` | 1 | CAMB-style multiplier on the internal discretizations: scales `m_grid_points` and, when `axionhmcode_path` is the SBU-COSMOLIKE fork, its growth/G/sigma(M) table node counts. Rerun the same yaml at 1 and 2 and compare boost grids to check convergence (measured 1-vs-2 shift: max dB/B ~ 1e-3, dominated by the halo-mass grid) |
+
+Parallelism (deliberately not a yaml option): the redshift loop forks one
+worker per `OMP_NUM_THREADS` core (identical numerics, wall time only;
+falls back to 1 when unset). The environment's core budget is always
+respected — the same contract as every OpenMP code in Cocoa, and correct
+under MPI, where each rank forks within its own allocation. There is no
+yaml override.
 
 Nuisance sampling: with `sample_nuisance: True`, add the four parameters to the
 yaml `params` block (Gaughan et al. flat priors: alpha_1 [0.6, 2.0], alpha_2
 [1.43, 2.54], gamma_1 [5.0, 45.0], gamma_2 [-0.37, -0.23]).
+
+## The dome flag configuration: released code vs. calibration paper
+
+For `version: dome` this theory calls axionHMcode with `alpha=True,
+concentration_param=True, one_halo_damping=True, full_2h=False,
+eta_given=False, two_halo_damping=False`. These defaults follow the released
+code: the upstream README recommends exactly `alpha = True` and
+`concentration_param = True` for the dome version, notes that the calibration
+"was performed with `full_2h = False`", and warns that the HMcode-2020
+parameter switches are not calibrated to mixed axion/cold-dark-matter
+cosmologies. This configuration also reproduces Figs. 1-3 of Gaughan, Green &
+Moss ([arXiv:2605.12054](https://arxiv.org/abs/2605.12054)), the published
+constraint pipeline built on this code (validation test V3 in the
+[developer guide](../BOOST_DEVELOPER_GUIDE.md)).
+
+There is, however, a documented tension with the calibration paper itself.
+Dome et al. ([arXiv:2409.11469](https://arxiv.org/abs/2409.11469), Sec. 4.4)
+state that the recalibrated model activates by default the halo bloating
+parameter eta (their Eq. 57) and the perturbative two-halo damping (their
+Eq. 55), alongside the one-halo damping and the alpha smoothing — meaning the
+fitted alpha values of their Table 5 were calibrated with eta and the two-halo
+damping active. Running those fitted alpha values with the two switches off,
+as the released code recommends, is therefore a small internal inconsistency
+in the upstream recommendation. The expected size of the difference is a few
+percent in the quasi-linear regime, inside the model's quoted 10-20% accuracy
+band.
+
+> [!NOTE]
+> Our defaults deliberately follow the released code — that keeps this
+> pipeline consistent with how the ecosystem actually runs axionHMcode and
+> with the published Gaughan et al. results. The question has been put to the
+> collaborators/upstream. If it is resolved in favor of the paper
+> configuration, no code change is needed; flip the two switches from the
+> yaml:
+>
+> ```yaml
+> axionhmcode_boost.AxionHMcodeBoost:
+>   # ...
+>   model_flags: {eta_given: True, two_halo_damping: True}
+> ```
 
 ## Axion mass: the two run modes
 
@@ -115,12 +162,22 @@ params:
 
 ## Cost
 
-Measured (2026-07-01, single core, warm numba): ~1.3 s/redshift (basic),
-~2.7 s/redshift (dome). Lensed-Cl runs need the full internal lensing grid
-(50 nodes at AccuracyBoost 1, 75 at 1.5) -> ~1-3.5 min per likelihood
-evaluation single-threaded; `processes: N` divides the wall time without
-changing any number. If this is too slow for production MCMC, the intended
-path is training an ML emulator on this pipeline's output (same interface).
+Measured single core, warm numba, per redshift:
+
+| checkout | basic | dome |
+|---|---|---|
+| upstream SophieMLV | ~1.3 s | ~2.7 s (3.5 s at z=0) |
+| SBU-COSMOLIKE fork (VM-SPEEDUP rounds 1-3, 2026-07-02/03) | ~0.2 s | ~0.34 s |
+
+The fork changes are validated against upstream to max |dB/B| = 1.6e-5
+(see the fork README appendix for the mathematics and the protocol).
+Lensed-Cl runs need the full internal lensing grid (50 nodes at
+AccuracyBoost 1, 75 at 1.5): ~17 s (fork) / ~135 s (upstream) per dome
+likelihood evaluation single-threaded. The z-loop fork parallelism divides
+the wall time without changing any number, with one worker per
+`OMP_NUM_THREADS` core (always; no yaml override). If this is still too
+slow for production MCMC, the intended path is training an ML emulator on
+this pipeline's output (same interface).
 
 ## Tests and development scripts
 
