@@ -428,7 +428,7 @@
     real(dl) lh_skip
     real(dl) v1_initguess(3), omaxh2_guess(3), aosc_guess(3)
     integer iter_c
-    logical bisec_bracketed
+    logical bisec_bracketed, fp_refined
     real(dl) vtwiddle_init
     real(dl) d1, d2
     real(dl) a_init, a_m, a_lambda, a_rel, as_scalar, as_rad, as_matt, a_final
@@ -612,6 +612,7 @@
         a_arr(i) = dexp(this%loga_table(i))
     end do
     bisec_bracketed = .false.
+    fp_refined = .false.
 
     !Analytic first guess of the initial v1 using m/H_* = 3 asymptotics
     if (maxion_twiddle < 3.0d0) then !axions never oscillate (DE-like)
@@ -763,13 +764,48 @@
                 end if
             end if
 
-            if (abs(omaxh2_guess(j)/omegah2_ax - 1.0d0) < 1.0d-6) then
+            if (fp_refined) then
+                !second pass: accept the interpolated point, now that it has been evolved
+                if (j == 2) then
+                    vtwiddle_init = v1_initguess(2)
+                    this%a_osc = aosc_guess(2)
+                    iter_c = -1
+                    exit
+                end if
+            else if (abs(omaxh2_guess(j)/omegah2_ax - 1.0d0) < 1.0d-6) then
+                !omaxh2_guess(3) /= omaxh2_guess(1) prevents a divide by zero
+                if (bisec_bracketed .and. omaxh2_guess(3) /= omaxh2_guess(1)) then
+                    !One false-position step before accepting. Bisection uses only the sign
+                    !of the miss and stops at the first midpoint inside the tolerance, so its
+                    !error is scattered across the band. The bracket is by now narrow enough
+                    !that omaxh2(v1) is linear across it, so interpolating between the ends
+                    !by how much each misses lands orders of magnitude closer, for one extra
+                    !evolution.
+                    !
+                    !Once at the end, not instead of bisection: alone, false position can
+                    !crawl, since for a curved function one endpoint may stop being replaced
+                    !and the bracket shrinks from one side only.
+                    v1_initguess(2) = v1_initguess(1) + (v1_initguess(3) - v1_initguess(1))* &
+                        (omegah2_ax - omaxh2_guess(1))/(omaxh2_guess(3) - omaxh2_guess(1))
+                    omaxh2_guess(2) = 42.0d0
+                    aosc_guess(2) = 15.0d0
+                    fp_refined = .true.
+                    exit
+                end if
                 vtwiddle_init = v1_initguess(j)
                 this%a_osc = aosc_guess(j)
                 iter_c = -1
                 exit
             end if
         end do
+
+        if (fp_refined .and. iter_c /= -1) then
+            !re-evolve for the final point: go back and integrate the interpolated v1, so
+            !a_osc and the tables match the field value actually returned. cycle skips the
+            !bracket update, the midpoint reassignment and the grid truncation below.
+            iter_c = iter_c + 1
+            cycle
+        end if
 
         if (iter_c == -1) exit
         if (iter_c == nphi - 1) then
