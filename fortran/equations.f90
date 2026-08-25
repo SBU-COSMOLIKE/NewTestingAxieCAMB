@@ -56,7 +56,7 @@
     !Vector mode anisotropic stress in units of rho_gamma
     real(dl) :: vec_sig0 = 1._dl
     !Vector mode shear
-    integer, parameter :: max_l_evolve = 256 !Maximum l we are ever likely to propagate
+    integer, parameter :: max_l_evolve = 512 !Maximum l we are ever likely to propagate
     !Note higher values increase size of Evolution vars, hence memory
 
     !Supported scalar initial condition flags
